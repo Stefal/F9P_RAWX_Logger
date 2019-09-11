@@ -21,7 +21,7 @@
 // Define how long we should log in minutes before changing to a new file
 // Sensible values are: 5, 10, 15, 20, 30, 60
 // Must be <= 60 (or RTC alarm code needs to be updated to match on HHMMSS)
-const int INTERVAL = 15;
+const int INTERVAL = 60;
 
 // Define how long we should wait in msec (approx.) for residual RAWX data before closing the last log file
 // For a measurement rate of 4Hz (250msec), 300msec is a sensible value. i.e. slightly more than one measurement interval

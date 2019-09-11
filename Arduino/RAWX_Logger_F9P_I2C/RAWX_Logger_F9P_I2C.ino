@@ -28,7 +28,7 @@ const int INTERVAL = 15;
 const int dwell = 300;
 
 // Send serial debug messages
-//#define DEBUG // Comment this line out to disable debug messages
+#define DEBUG // Comment this line out to disable debug messages
 
 // Debug SerialBuffer
 // Displays a "Max bufAvail:" message each time SerialBuffer.available reaches a new maximum
@@ -627,8 +627,8 @@ void setup()
   // initialise SurveyInPin (A3) as an input for the SURVEY_IN switch
   pinMode(SurveyInPin, INPUT_PULLUP);
 
-  delay(10000); // Allow 10 sec for user to open serial monitor (Comment this line if required)
-  //while (!Serial); // OR Wait for user to run python script or open serial monitor (Comment this line as required)
+  //delay(10000); // Allow 10 sec for user to open serial monitor (Comment this line if required)
+  while (!Serial); // OR Wait for user to run python script or open serial monitor (Comment this line as required)
 
   Serial.begin(115200);
 
@@ -674,7 +674,7 @@ void setup()
   Serial.println(F("Ublox GNSS found!"));
 
 #ifdef DEBUG
-  i2cGPS.enableDebugging(); //Enable debug messages over Serial (default)
+  //i2cGPS.enableDebugging(); //Enable debug messages over Serial (default)
 #endif
 
   // These sendCommands will timeout as the commandAck checking in processUBXpacket expects the packet to be in packetCfg, not our custom packet!
@@ -758,6 +758,8 @@ void loop() // run over and over again
 {
   switch(loop_step) {
     case init: {
+
+//#ifdef Adafruit_NMEA
       // read data from the GNSS
       char c = GPS.read();
       // if you want to debug, this is a good time to do it!
@@ -767,29 +769,32 @@ void loop() // run over and over again
       if (GPS.newNMEAreceived()) {
         if (!GPS.parse(GPS.lastNMEA())) // this also sets the newNMEAreceived() flag to false
           break; // we can fail to parse a sentence in which case we should just wait for another
-    
+//#endif
+
+
 #ifdef DEBUG
         Serial.print("\nTime: ");
-        Serial.print(GPS.hour, DEC); Serial.print(':');
-        Serial.print(GPS.minute, DEC); Serial.print(':');
-        Serial.print(GPS.seconds, DEC); Serial.print('.');
-        Serial.println(GPS.milliseconds);
+        Serial.print(i2cGPS.getHour(), DEC); Serial.print(':');
+        Serial.print(i2cGPS.getMinute(), DEC); Serial.print(':');
+        Serial.print(i2cGPS.getSecond(), DEC); Serial.print('.');
+        Serial.println(i2cGPS.getMillisecond());
         Serial.print("Date: ");
-        Serial.print(GPS.day, DEC); Serial.print('/');
-        Serial.print(GPS.month, DEC); Serial.print("/20");
-        Serial.println(GPS.year, DEC);
-        Serial.print("Fix: "); Serial.print((int)GPS.fix);
-        Serial.print(" Quality: "); Serial.println((int)GPS.fixquality);
-        if (GPS.fix) {
+        Serial.print(i2cGPS.getYear(), DEC); Serial.print("/");
+        Serial.print(i2cGPS.getMonth(), DEC);  Serial.print("/");
+        Serial.println(i2cGPS.getDay(), DEC);
+        Serial.print("Fix: "); Serial.println((int)i2cGPS.getFixType());
+        //Serial.print(" Quality: "); Serial.println((int)GPS.fixquality);
+        if (i2cGPS.getFixType() == 3) {
+          
           Serial.print("Location: ");
-          Serial.print(GPS.latitude, 4); Serial.print(GPS.lat);
+          Serial.print(i2cGPS.getLatitude() * 1E-7, 6);
           Serial.print(", ");
-          Serial.print(GPS.longitude, 4); Serial.println(GPS.lon);
-          Serial.print("Speed (knots): "); Serial.println(GPS.speed);
-          Serial.print("Angle: "); Serial.println(GPS.angle);
-          Serial.print("Altitude: "); Serial.println(GPS.altitude);
-          Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
-          Serial.print("HDOP: "); Serial.println(GPS.HDOP);
+          Serial.println(i2cGPS.getLongitude() * 1E-7, 6);
+          Serial.print("Speed (m/s): "); Serial.println(i2cGPS.getGroundSpeed() * 1E-3);
+          Serial.print("Heading: "); Serial.println(i2cGPS.getHeading() * 1E-5);
+          Serial.print("Altitude (m): "); Serial.println(i2cGPS.getAltitude() * 1E-3);
+          Serial.print("Satellites: "); Serial.println((int)i2cGPS.getSIV());
+          Serial.print("HDOP: "); Serial.println(i2cGPS.getPDOP() * 1E-2);
         }
 #endif
   
@@ -802,7 +807,7 @@ void loop() // run over and over again
       
         // turn green LED on to indicate GNSS fix
         // or set NeoPixel to cyan
-        if (GPS.fix) {
+        if (i2cGPS.getFixType() == 3) {
 #ifndef NoLED
 #ifdef NeoPixel
           setLED(cyan); // Set NeoPixel to cyan
@@ -830,14 +835,15 @@ void loop() // run over and over again
           // Set and start the RTC
           alarmFlag = false; // Make sure alarm flag is clear
           rtc.begin(); // Start the RTC
-          rtc.setTime(GPS.hour, GPS.minute, GPS.seconds); // Set the time
-          rtc.setDate(GPS.day, GPS.month, GPS.year); // Set the date
+          rtc.setTime(i2cGPS.getHour(), i2cGPS.getMinute(), i2cGPS.getMinute()); // Set the time
+          rtc.setDate(i2cGPS.getDay(), i2cGPS.getMonth(), i2cGPS.getYear() - 2000); // Set the date
           rtc.setAlarmSeconds(0); // Set RTC Alarm Seconds to zero
           uint8_t nextAlarmMin = ((GPS.minute+INTERVAL)/INTERVAL)*INTERVAL; // Calculate next alarm minutes
           nextAlarmMin = nextAlarmMin % 60; // Correct hour rollover
           rtc.setAlarmMinutes(nextAlarmMin); // Set RTC Alarm Minutes
           rtc.enableAlarm(rtc.MATCH_MMSS); // Alarm Match on minutes and seconds
           rtc.attachInterrupt(alarmMatch); // Attach alarm interrupt
+          Serial.print("RTC Year: "); Serial.println(rtc.getYear(), DEC);
 
           // check if voltage is > LOWBAT(V), if not then don't try to log any data
           if (vbat < LOWBAT) {

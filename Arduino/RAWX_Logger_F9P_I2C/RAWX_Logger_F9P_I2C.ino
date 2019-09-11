@@ -32,7 +32,7 @@ const int dwell = 300;
 
 // Debug SerialBuffer
 // Displays a "Max bufAvail:" message each time SerialBuffer.available reaches a new maximum
-//#define DEBUGserialBuffer // Comment this to disable serial buffer maximum available debugging
+#define DEBUGserialBuffer // Comment this to disable serial buffer maximum available debugging
 
 // Connect modePin to GND to select base mode. Leave open for rover mode.
 #define modePin 14 // A0 / Digital Pin 14
@@ -618,8 +618,8 @@ void setup()
   // initialise SurveyInPin (A3) as an input for the SURVEY_IN switch
   pinMode(SurveyInPin, INPUT_PULLUP);
 
-  //delay(10000); // Allow 10 sec for user to open serial monitor (Comment this line if required)
-  while (!Serial); // OR Wait for user to run python script or open serial monitor (Comment this line as required)
+  delay(10000); // Allow 10 sec for user to open serial monitor (Comment this line if required)
+  //while (!Serial); // OR Wait for user to run python script or open serial monitor (Comment this line as required)
 
   Serial.begin(115200);
 
@@ -699,9 +699,7 @@ void setup()
     //i2cGPS.sendCommand(setNAVair4g); // Set Airborne <4G Navigation Mode
     //i2cGPS.sendCommand(setNAVwrist); // Set Wrist Navigation Mode
   }
-
-  GPS.begin(230400); // Start Serial1 at 230400 baud
-  delay(1100);
+  Serial1.begin(230400); // Start Serial1 at 230400 baud
   while(Serial1.available()){Serial1.read();} // Flush RX buffer so we don't confuse Adafruit_GPS with UBX acknowledgements
 
   Serial.println("GNSS initialized!");
@@ -816,7 +814,7 @@ void loop() // run over and over again
           rtc.setTime(i2cGPS.getHour(), i2cGPS.getMinute(), i2cGPS.getMinute()); // Set the time
           rtc.setDate(i2cGPS.getDay(), i2cGPS.getMonth(), i2cGPS.getYear() - 2000); // Set the date
           rtc.setAlarmSeconds(0); // Set RTC Alarm Seconds to zero
-          uint8_t nextAlarmMin = ((GPS.minute+INTERVAL)/INTERVAL)*INTERVAL; // Calculate next alarm minutes
+          uint8_t nextAlarmMin = ((i2cGPS.getMinute()+INTERVAL)/INTERVAL)*INTERVAL; // Calculate next alarm minutes
           nextAlarmMin = nextAlarmMin % 60; // Correct hour rollover
           rtc.setAlarmMinutes(nextAlarmMin); // Set RTC Alarm Minutes
           rtc.enableAlarm(rtc.MATCH_MMSS); // Alarm Match on minutes and seconds
@@ -972,6 +970,7 @@ void loop() // run over and over again
       }
 #else
       rawx_dataFile.timestamp(T_CREATE, (RTCyear+2000), RTCmonth, RTCday, RTChours, RTCminutes, RTCseconds);
+        Serial.println("File create timestamp set");
 #endif
 
       // Now that SD write is complete
@@ -1098,6 +1097,7 @@ void loop() // run over and over again
         // Only allow a new file to be opened when a complete packet has been processed and ubx_nmea_state has returned to "looking_for_B5_dollar"
         // Or when a data error is detected (sync_lost)
         switch (ubx_nmea_state) {
+          Serial.println("Entering ubx_nmea_state case");
           case (looking_for_B5_dollar): {
             if (c == 0xB5) { // Have we found Sync Char 1 (0xB5) if we were expecting one?
               ubx_nmea_state = looking_for_62; // Now look for Sync Char 2 (0x62)
@@ -1136,6 +1136,8 @@ void loop() // run over and over again
           // NAV_POSLLH is class 0x01 ID 0x02
           // NAV_PVT is class 0x01 ID 0x07
           // NAV-STATUS is class 0x01 ID 0x03
+          // NAV-POSLLH is class 0x01 ID 0x14
+          // NAV-SAT is class 0x01 ID 0x35
           case (looking_for_class): {
             ubx_class = c;
             ubx_expected_checksum_A = ubx_expected_checksum_A + c; // Update the expected checksum
@@ -1159,16 +1161,18 @@ void loop() // run over and over again
             // ID syntax checking
             if ((ubx_class == 0x02) and ((ubx_ID != 0x15) and (ubx_ID != 0x13))) {
               Serial.println("Panic!! Was expecting ID of 0x15 or 0x13 but did not receive one!");
-              ubx_nmea_state = sync_lost;
+              //ubx_nmea_state = sync_lost;
             }
             else if ((ubx_class == 0x0d) and (ubx_ID != 0x03)) {
               Serial.println("Panic!! Was expecting ID of 0x03 but did not receive one!");
-              ubx_nmea_state = sync_lost;
+              //ubx_nmea_state = sync_lost;
             }
-            else if ((ubx_class == 0x01) and ((ubx_ID != 0x02) and (ubx_ID != 0x07) and (ubx_ID != 0x03))) {
+            else if ((ubx_class == 0x01) and ((ubx_ID != 0x02) and (ubx_ID != 0x07) and (ubx_ID != 0x03) and (ubx_ID != 0x14) and (ubx_ID != 0x26) and (ubx_ID != 0x35))) {
               Serial.println("Panic!! Was expecting ID of 0x02 or 0x07 or 0x03 but did not receive one!");
-              ubx_nmea_state = sync_lost;
+              //ubx_nmea_state = sync_lost;
             }
+            Serial.print("ubx_class = "); Serial.print(ubx_class, HEX);
+            Serial.print("\t ubx_id = "); Serial.println(ubx_ID, HEX);
 #endif
           }
           break;

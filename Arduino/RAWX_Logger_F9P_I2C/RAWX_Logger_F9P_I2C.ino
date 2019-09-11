@@ -28,7 +28,7 @@ const int INTERVAL = 15;
 const int dwell = 300;
 
 // Send serial debug messages
-#define DEBUG // Comment this line out to disable debug messages
+//#define DEBUG // Comment this line out to disable debug messages
 
 // Debug SerialBuffer
 // Displays a "Max bufAvail:" message each time SerialBuffer.available reaches a new maximum
@@ -79,15 +79,6 @@ SFE_UBLOX_GPS i2cGPS;
 #define LED_Brightness 32 // 0 - 255 for WB2812B
 #endif
 
-// Include the Adafruit GPS Library
-// https://github.com/adafruit/Adafruit_GPS
-// This is used at the start of the code to establish a fix and
-// provide the date and time for the RAWX log file filename
-#include <Adafruit_GPS.h>
-Adafruit_GPS GPS(&Serial1); // M0 hardware serial
-// Set GPSECHO to 'false' to turn off echoing the GPS data to the Serial console
-// Set to 'true' if you want to debug and listen to the raw GPS sentences
-#define GPSECHO false
 // this keeps track of whether we're using the interrupt
 // off by default!
 boolean usingInterrupt = false;
@@ -759,19 +750,6 @@ void loop() // run over and over again
   switch(loop_step) {
     case init: {
 
-//#ifdef Adafruit_NMEA
-      // read data from the GNSS
-      char c = GPS.read();
-      // if you want to debug, this is a good time to do it!
-      if (GPSECHO)
-        if (c) Serial.print(c);
-      // if a sentence is received, we can check the checksum, parse it...
-      if (GPS.newNMEAreceived()) {
-        if (!GPS.parse(GPS.lastNMEA())) // this also sets the newNMEAreceived() flag to false
-          break; // we can fail to parse a sentence in which case we should just wait for another
-//#endif
-
-
 #ifdef DEBUG
         Serial.print("\nTime: ");
         Serial.print(i2cGPS.getHour(), DEC); Serial.print(':');
@@ -843,8 +821,6 @@ void loop() // run over and over again
           rtc.setAlarmMinutes(nextAlarmMin); // Set RTC Alarm Minutes
           rtc.enableAlarm(rtc.MATCH_MMSS); // Alarm Match on minutes and seconds
           rtc.attachInterrupt(alarmMatch); // Attach alarm interrupt
-          Serial.print("RTC Year: "); Serial.println(rtc.getYear(), DEC);
-
           // check if voltage is > LOWBAT(V), if not then don't try to log any data
           if (vbat < LOWBAT) {
             Serial.println("Low Battery!");
@@ -886,7 +862,6 @@ void loop() // run over and over again
           
           loop_step = start_rawx; // start rawx messages
         }
-      }
     }
     break;
 

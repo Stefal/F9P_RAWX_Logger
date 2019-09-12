@@ -1,7 +1,0 @@
-{
-    "board": "adafruit:samd:adafruit_feather_m0",
-    "configuration": "usbstack=arduino,debug=off",
-    "programmer": "AVRISP mkII",
-    "port": "COM40",
-    "sketch": "Arduino\\RAWX_Logger_F9P_I2C\\RAWX_Logger_F9P_I2C.ino"
-}

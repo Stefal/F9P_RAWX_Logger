@@ -2,7 +2,6 @@
 
 // Logs RXM-RAWX, RXM-SFRBX and TIM-TM2 data from u-blox ZED_F9P GNSS to SD card
 // Also logs NAV_PVT messages (which provide the carrSoln status) and NAV-STATUS messages (which indicate a time fix for Survey_In mode)
-// Also logs high precision NMEA GNGGA position solution messages which can be extracted by RTKLIB
 
 // This version uses the SparkFun u-blox library by Nate Seidle to configure the RAWX messages via I2C, leaving the UART dedicated for the messages to be logged to SD card
 // Feel like supporting open source hardware? Buy a board from SparkFun!
@@ -155,11 +154,6 @@ int loop_step = init;
 #define looking_for_checksum_A  7
 #define looking_for_checksum_B  8
 #define sync_lost               9
-#define looking_for_asterix     10
-#define looking_for_csum1       11
-#define looking_for_csum2       12
-#define looking_for_term1       13
-#define looking_for_term2       14
 int ubx_nmea_state = looking_for_B5_dollar;
 int ubx_length = 0;
 int ubx_class = 0;
@@ -168,17 +162,6 @@ int ubx_checksum_A = 0;
 int ubx_checksum_B = 0;
 int ubx_expected_checksum_A = 0;
 int ubx_expected_checksum_B = 0;
-int nmea_char_1 = '0'; // e.g. G
-int nmea_char_2 = '0'; // e.g. P
-int nmea_char_3 = '0'; // e.g. G
-int nmea_char_4 = '0'; // e.g. G
-int nmea_char_5 = '0'; // e.g. A
-int nmea_csum = 0;
-int nmea_csum1 = '0';
-int nmea_csum2 = '0';
-int nmea_expected_csum1 = '0';
-int nmea_expected_csum2 = '0';
-#define max_nmea_len 100 // Maximum length for an NMEA message: use this to detect if we have lost sync while receiving an NMEA message
 
 // Definitions for u-blox F9P UBX-format (binary) messages
 // As a temporary fix, until multi-setVal is available, these messages are defined in SparkFun ubxPacket format:
@@ -671,10 +654,9 @@ void setup()
   // These sendCommands will timeout as the commandAck checking in processUBXpacket expects the packet to be in packetCfg, not our custom packet!
   // Turn on DEBUG to see if the commands are acknowledged (Received: CLS:5 ID:1 Payload: 6 8A) or not acknowledged (CLS:5 ID:0)
   i2cGPS.sendCommand(disableI2cNMEA); //Disable NMEA messages on the I2C port leaving it clear for UBX messages
+  i2cGPS.sendCommand(setNMEAoff); // Disable NMEA messages (need testing, it seems it doesn't disable NMEA output on UART1)
   i2cGPS.sendCommand(setUART1BAUD); // Change the UART1 baud rate to 230400
   i2cGPS.sendCommand(setRAWXoff); // Disable RAWX messages (on UART1). Also disables the NMEA high precision mode
-  i2cGPS.sendCommand(setNMEAon); // Enable NMEA messages GGA and RMC; disable the others
-  i2cGPS.sendCommand(setTALKERID); // Set NMEA TALKERID to GP
   i2cGPS.sendCommand(setRATE_1Hz); // Set Navigation/Measurement Rate to 1Hz
   i2cGPS.sendCommand(setUART2BAUD_115200); // Set UART2 Baud rate
   i2cGPS.sendCommand(disableSurveyIn); // Disable Survey_In mode
@@ -836,9 +818,6 @@ void loop() // run over and over again
             break;
           }
 
-          // Disable the GPGGA and GPRMC messages
-          i2cGPS.sendCommand(setNMEAoff);
-          delay(100);
 
           // Set the RAWX measurement rate
           //i2cGPS.sendCommand(setRATE_20Hz); // Set Navigation/Measurement Rate to 20 Hz
@@ -1098,13 +1077,6 @@ void loop() // run over and over again
         // Length: two bytes, little endian
         // Payload: length bytes
         // Checksum: two bytes
-        // For NMEA messages:
-        // Starts with a '$'
-        // The next five characters indicate the message type (stored in nmea_char_1 to nmea_char_5)
-        // Message fields are comma-separated
-        // Followed by an '*'
-        // Then a two character checksum (the logical exclusive-OR of all characters between the $ and the * as ASCII hex)
-        // Ends with CR LF
         // Only allow a new file to be opened when a complete packet has been processed and ubx_nmea_state has returned to "looking_for_B5_dollar"
         // Or when a data error is detected (sync_lost)
         switch (ubx_nmea_state) {
@@ -1113,16 +1085,7 @@ void loop() // run over and over again
             if (c == 0xB5) { // Have we found Sync Char 1 (0xB5) if we were expecting one?
               ubx_nmea_state = looking_for_62; // Now look for Sync Char 2 (0x62)
             }
-            else if (c == '$') { // Have we found an NMEA '$' if we were expecting one?
-              ubx_nmea_state = looking_for_asterix; // Now keep going until we receive an asterix
-              ubx_length = 0; // Reset ubx_length then use it to track which character has arrived
-              nmea_csum = 0; // Reset the nmea_csum. Update it as each character arrives
-              nmea_char_1 = '0'; // Reset the first five NMEA chars to something invalid
-              nmea_char_2 = '0';
-              nmea_char_3 = '0';
-              nmea_char_4 = '0';
-              nmea_char_5 = '0';
-            }
+            
             else {
               Serial.println("Panic!! Was expecting Sync Char 0xB5 or an NMEA $ but did not receive one!");
               ubx_nmea_state = sync_lost;
@@ -1319,103 +1282,6 @@ void loop() // run over and over again
             if ((ubx_expected_checksum_A != ubx_checksum_A) or (ubx_expected_checksum_B != ubx_checksum_B)) {
               Serial.println("Panic!! UBX checksum error!");
               ubx_nmea_state = sync_lost;
-            }
-          }
-          break;
-          // NMEA messages
-          case (looking_for_asterix): {
-            ubx_length++; // Increase the message length count
-            if (ubx_length > max_nmea_len) { // If the length is greater than max_nmea_len, something bad must have happened (sync_lost)
-              Serial.println("Panic!! Excessive NMEA message length!");
-              ubx_nmea_state = sync_lost;
-              break;
-            }
-            // If this is one of the first five characters, store it
-            // May be useful for on-the-fly message parsing or DEBUG
-            if (ubx_length <= 5) {
-              if (ubx_length == 1) {
-                nmea_char_1 = c;
-              }
-              else if (ubx_length == 2) {
-                nmea_char_2 = c;
-              }
-              else if (ubx_length == 3) {
-                nmea_char_3 = c;
-              }
-              else if (ubx_length == 4) {
-                nmea_char_4 = c;
-              }
-              else { // ubx_length == 5
-                nmea_char_5 = c;
-#ifdef DEBUG
-                Serial.print("NMEA message type is: ");
-                Serial.print(char(nmea_char_1));
-                Serial.print(char(nmea_char_2));
-                Serial.print(char(nmea_char_3));
-                Serial.print(char(nmea_char_4));
-                Serial.println(char(nmea_char_5));
-#endif              
-              }
-            }
-            // Now check if this is an '*'
-            if (c == '*') {
-              // Asterix received
-              // Don't exOR it into the checksum
-              // Instead calculate what the expected checksum should be (nmea_csum in ASCII hex)
-              nmea_expected_csum1 = ((nmea_csum & 0xf0) >> 4) + '0'; // Convert MS nibble to ASCII hex
-              if (nmea_expected_csum1 >= ':') { nmea_expected_csum1 += 7; } // : follows 9 so add 7 to convert to A-F
-              nmea_expected_csum2 = (nmea_csum & 0x0f) + '0'; // Convert LS nibble to ASCII hex
-              if (nmea_expected_csum2 >= ':') { nmea_expected_csum2 += 7; } // : follows 9 so add 7 to convert to A-F
-              // Next, look for the first csum character
-              ubx_nmea_state = looking_for_csum1;
-              break; // Don't include the * in the checksum
-            }
-            // Now update the checksum
-            // The checksum is the exclusive-OR of all characters between the $ and the *
-            nmea_csum = nmea_csum ^ c;
-          }
-          break;
-          case (looking_for_csum1): {
-            // Store the first NMEA checksum character
-            nmea_csum1 = c;
-            ubx_nmea_state = looking_for_csum2;
-          }
-          break;
-          case (looking_for_csum2): {
-            // Store the second NMEA checksum character
-            nmea_csum2 = c;
-            // Now check if the checksum is correct
-            if ((nmea_csum1 != nmea_expected_csum1) or (nmea_csum2 != nmea_expected_csum2)) {
-              // The checksum does not match so sync_lost
-              Serial.println("Panic!! NMEA checksum error!");
-              ubx_nmea_state = sync_lost;
-            }
-            else {
-              // Checksum was valid so wait for the terminators
-              ubx_nmea_state = looking_for_term1;
-            }
-          }
-          break;
-          case (looking_for_term1): {
-            // Check if this is CR
-            if (c != '\r') {
-              Serial.println("Panic!! NMEA CR not found!");
-              ubx_nmea_state = sync_lost;
-            }
-            else {
-              ubx_nmea_state = looking_for_term2;
-            }
-          }
-          break;
-          case (looking_for_term2): {
-            // Check if this is LF
-            if (c != '\n') {
-              Serial.println("Panic!! NMEA LF not found!");
-              ubx_nmea_state = sync_lost;
-            }
-            else {
-              // LF was received so go back to looking for B5 or a $
-              ubx_nmea_state = looking_for_B5_dollar;
             }
           }
           break;

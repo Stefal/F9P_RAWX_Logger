@@ -17,10 +17,10 @@
 // Ensure the card is formatted as FAT32.
 
 // Changes to a new log file every INTERVAL minutes
+#define splitLog // comment this line if you don't want a new file every INTERVAL minutes
 
 // Define how long we should log in minutes before changing to a new file
 // Sensible values are: 5, 10, 15, 20, 30, 60
-// Must be <= 60 (or RTC alarm code needs to be updated to match on HHMMSS)
 const int INTERVAL = 60;
 
 // Define how long we should wait in msec (approx.) for residual RAWX data before closing the last log file
@@ -811,14 +811,25 @@ void loop() // run over and over again
           // Set and start the RTC
           alarmFlag = false; // Make sure alarm flag is clear
           rtc.begin(); // Start the RTC
-          rtc.setTime(i2cGPS.getHour(), i2cGPS.getMinute(), i2cGPS.getMinute()); // Set the time
+          rtc.setTime(i2cGPS.getHour(), i2cGPS.getMinute(), i2cGPS.getSecond()); // Set the time
           rtc.setDate(i2cGPS.getDay(), i2cGPS.getMonth(), i2cGPS.getYear() - 2000); // Set the date
           rtc.setAlarmSeconds(0); // Set RTC Alarm Seconds to zero
-          uint8_t nextAlarmMin = ((i2cGPS.getMinute()+INTERVAL)/INTERVAL)*INTERVAL; // Calculate next alarm minutes
+          uint8_t nextAlarmMin = (i2cGPS.getMinute()+INTERVAL); // Calculate next alarm minutes
+          uint8_t addHour = 0;
+          uint8_t nextAlarmHour = 0;
+          while (nextAlarmMin - 60 > 0) {  // Calculate hours to add
+            addHour += 1;
+            nextAlarmMin = nextAlarmMin - 60;
+          }
           nextAlarmMin = nextAlarmMin % 60; // Correct hour rollover
+          nextAlarmHour = (i2cGPS.getHour() + addHour) % 24; // Correct day rollover
+          rtc.setAlarmHours(nextAlarmHour); // Set RTC Alarm Hours
           rtc.setAlarmMinutes(nextAlarmMin); // Set RTC Alarm Minutes
-          rtc.enableAlarm(rtc.MATCH_MMSS); // Alarm Match on minutes and seconds
+#ifdef splitLog
+          Serial.print("Next new file set to: "); Serial.print(nextAlarmHour); Serial.print("H"); Serial.println(nextAlarmMin);
+          rtc.enableAlarm(rtc.MATCH_HHMMSS); // Alarm Match on hours, minutes and seconds
           rtc.attachInterrupt(alarmMatch); // Attach alarm interrupt
+#endif
           // check if voltage is > LOWBAT(V), if not then don't try to log any data
           if (vbat < LOWBAT) {
             Serial.println("Low Battery!");

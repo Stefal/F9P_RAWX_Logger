@@ -1088,6 +1088,7 @@ void loop() // run over and over again
             
             else {
               Serial.println("Panic!! Was expecting Sync Char 0xB5 or an NMEA $ but did not receive one!");
+              Serial.print("We received: "); Serial.println(c, HEX);
               ubx_nmea_state = sync_lost;
             }
           }
@@ -1100,6 +1101,7 @@ void loop() // run over and over again
             }
             else {
               Serial.println("Panic!! Was expecting Sync Char 0x62 but did not receive one!");
+              Serial.print("We received: "); Serial.println(c, HEX);
               ubx_nmea_state = sync_lost;
             }
           }

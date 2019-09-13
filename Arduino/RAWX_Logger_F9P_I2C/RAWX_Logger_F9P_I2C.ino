@@ -131,7 +131,7 @@ bool stop_pressed = false; // Flag to indicate if stop switch was pressed to sto
 // https://gist.github.com/jdneo/43be30d85080b175cb5aed3500d3f989
 // That way, we do not need to increase the size of the Serial1 receive buffer (by editing RingBuffer.h)
 // You can use DEBUGserialBuffer to determine how big the buffer should be. Increase it if you see bufAvail get close to or reach the buffer size.
-RingBufferN<16384> SerialBuffer; // Define SerialBuffer as a RingBuffer of size 16k bytes
+RingBufferN<32786> SerialBuffer; // Define SerialBuffer as a RingBuffer of size 32k bytes
 
 // Loop Steps
 #define init          0
@@ -863,7 +863,7 @@ void loop() // run over and over again
       i2cGPS.sendCommand(setRAWXon); // (Re)Start the UBX and NMEA messages
 
       bufferPointer = 0; // (Re)initialise bufferPointer
-
+      maxSerialBufferAvailable = 0; // (Re)initialise maxSerialBufferAvailable
       loop_step = open_file; // start logging rawx data
     }
     break;

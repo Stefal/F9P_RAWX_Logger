@@ -184,8 +184,13 @@ ubxPacket disableI2cNMEA = { 0x06, 0x8a,  9, 0, 0,  disableI2cNMEA_payload,  0, 
 
 // Set UART1 to 230400 Baud
 // UBX-CFG-VALSET message with a key ID of 0x40520001 (CFG-UART1-BAUDRATE) and a value of 0x00038400 (230400 decimal)
-static uint8_t setUART1BAUD_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x52, 0x40,  0x00, 0x84, 0x03, 0x00 };
-ubxPacket setUART1BAUD = { 0x06, 0x8a,  12, 0, 0,  setUART1BAUD_payload,  0, 0, false };
+static uint8_t setUART1BAUD_payload_230400[] = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x52, 0x40,  0x00, 0x84, 0x03, 0x00 };
+ubxPacket setUART1BAUD_230400 = { 0x06, 0x8a,  12, 0, 0,  setUART1BAUD_payload_230400,  0, 0, false };
+
+// Set UART1 to 460800 Baud
+// UBX-CFG-VALSET message with a key ID of 0x40520001 (CFG-UART1-BAUDRATE) and a value of 0x00070800 (460800 decimal)
+static uint8_t setUART1BAUD_payload_460800[] = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x52, 0x40,  0x00, 0x08, 0x07, 0x00 };
+ubxPacket setUART1BAUD_460800 = { 0x06, 0x8a,  12, 0, 0,  setUART1BAUD_payload_460800,  0, 0, false };
 
 // setRAWXoff: this is the message which disables all of the messages being logged to SD card
 // It also clears the NMEA high precision mode for the GPGGA message
@@ -655,7 +660,7 @@ void setup()
   // Turn on DEBUG to see if the commands are acknowledged (Received: CLS:5 ID:1 Payload: 6 8A) or not acknowledged (CLS:5 ID:0)
   i2cGPS.sendCommand(disableI2cNMEA); //Disable NMEA messages on the I2C port leaving it clear for UBX messages
   i2cGPS.sendCommand(setNMEAoff); // Disable NMEA messages (need testing, it seems it doesn't disable NMEA output on UART1)
-  i2cGPS.sendCommand(setUART1BAUD); // Change the UART1 baud rate to 230400
+  i2cGPS.sendCommand(setUART1BAUD_460800); // Change the UART1 baud rate to 460800
   i2cGPS.sendCommand(setRAWXoff); // Disable RAWX messages (on UART1). Also disables the NMEA high precision mode
   i2cGPS.sendCommand(setRATE_1Hz); // Set Navigation/Measurement Rate to 1Hz
   i2cGPS.sendCommand(setUART2BAUD_115200); // Set UART2 Baud rate
@@ -681,7 +686,7 @@ void setup()
     //i2cGPS.sendCommand(setNAVair4g); // Set Airborne <4G Navigation Mode
     //i2cGPS.sendCommand(setNAVwrist); // Set Wrist Navigation Mode
   }
-  Serial1.begin(230400); // Start Serial1 at 230400 baud
+  Serial1.begin(460800); // Start Serial1 at 460800 baud
   while(Serial1.available()){Serial1.read();} // Flush RX buffer so we don't confuse Adafruit_GPS with UBX acknowledgements
 
   Serial.println("GNSS initialized!");

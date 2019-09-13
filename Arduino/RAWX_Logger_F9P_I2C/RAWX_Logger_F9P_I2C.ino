@@ -826,9 +826,9 @@ void loop() // run over and over again
 
           // Set the RAWX measurement rate
           //i2cGPS.sendCommand(setRATE_20Hz); // Set Navigation/Measurement Rate to 20 Hz
-          //i2cGPS.sendCommand(setRATE_10Hz); // Set Navigation/Measurement Rate to 10 Hz
+          i2cGPS.sendCommand(setRATE_10Hz); // Set Navigation/Measurement Rate to 10 Hz
           //i2cGPS.sendCommand(setRATE_5Hz); // Set Navigation/Measurement Rate to 5 Hz
-          i2cGPS.sendCommand(setRATE_4Hz); // Set Navigation/Measurement Rate to 4 Hz
+          //i2cGPS.sendCommand(setRATE_4Hz); // Set Navigation/Measurement Rate to 4 Hz
           //i2cGPS.sendCommand(setRATE_2Hz); // Set Navigation/Measurement Rate to 2 Hz
           //i2cGPS.sendCommand(setRATE_1Hz); // Set Navigation/Measurement Rate to 1 Hz
           

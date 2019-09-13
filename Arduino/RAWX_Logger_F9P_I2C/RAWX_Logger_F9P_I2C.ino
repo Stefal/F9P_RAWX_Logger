@@ -1087,8 +1087,7 @@ void loop() // run over and over again
             }
             
             else {
-              Serial.println("Panic!! Was expecting Sync Char 0xB5 or an NMEA $ but did not receive one!");
-              Serial.print("We received: "); Serial.println(c, HEX);
+              Serial.println("Panic!! Was expecting Sync Char 0xB5 but received: "); Serial.println(c, HEX);
               ubx_nmea_state = sync_lost;
             }
           }
@@ -1100,7 +1099,7 @@ void loop() // run over and over again
               ubx_nmea_state = looking_for_class; // Now look for Class byte
             }
             else {
-              Serial.println("Panic!! Was expecting Sync Char 0x62 but did not receive one!");
+              Serial.println("Panic!! Was expecting Sync Char 0x62 but received: "); Serial.println(c, HEX);
               Serial.print("We received: "); Serial.println(c, HEX);
               ubx_nmea_state = sync_lost;
             }
@@ -1122,7 +1121,7 @@ void loop() // run over and over again
 #ifdef DEBUG
             // Class syntax checking
             if ((ubx_class != 0x02) and (ubx_class != 0x0d) and (ubx_class != 0x01)) {
-              Serial.println("Panic!! Was expecting Class of 0x02 or 0x0d or 0x01 but did not receive one!");
+              Serial.println("Panic!! Was expecting Class of 0x02 or 0x0d or 0x01 but received: "); Serial.println(ubx_class, HEX);
               ubx_nmea_state = sync_lost;
             }
 #endif
@@ -1136,15 +1135,15 @@ void loop() // run over and over again
 #ifdef DEBUG
             // ID syntax checking
             if ((ubx_class == 0x02) and ((ubx_ID != 0x15) and (ubx_ID != 0x13))) {
-              Serial.println("Panic!! Was expecting ID of 0x15 or 0x13 but did not receive one!");
+              Serial.println("Panic!! Was expecting ID of 0x15 or 0x13 but received"); Serial.println(ubx_class, HEX);
               //ubx_nmea_state = sync_lost;
             }
             else if ((ubx_class == 0x0d) and (ubx_ID != 0x03)) {
-              Serial.println("Panic!! Was expecting ID of 0x03 but did not receive one!");
+              Serial.println("Panic!! Was expecting ID of 0x03 but received"); Serial.println(ubx_class, HEX);
               //ubx_nmea_state = sync_lost;
             }
             else if ((ubx_class == 0x01) and ((ubx_ID != 0x02) and (ubx_ID != 0x07) and (ubx_ID != 0x03) and (ubx_ID != 0x14) and (ubx_ID != 0x26) and (ubx_ID != 0x35))) {
-              Serial.println("Panic!! Was expecting ID of 0x02 or 0x07 or 0x03 but did not receive one!");
+              Serial.println("Panic!! Was expecting ID of 0x02 or 0x07 or 0x03 or 0x14 or 0x26 or 0x35 but received"); Serial.println(ubx_class, HEX);
               //ubx_nmea_state = sync_lost;
             }
             Serial.print("ubx_class = "); Serial.print(ubx_class, HEX);

@@ -850,8 +850,8 @@ void loop() // run over and over again
           while(Serial1.available()){Serial1.read();} // Flush RX buffer to clear UBX acknowledgements
 
           // Now that Serial1 should be idle and the buffer empty, start TC3 interrupts to copy all new data into SerialBuffer
-          // Set the timer interval to 10 * 10 / 230400 = 0.000434 secs (10 bytes * 10 bits (1 start, 8 data, 1 stop) at 230400 baud)
-          startTimerInterval(0.000434); 
+          // Set the timer interval to 10 * 10 / 460800 = 0.000217 secs (10 bytes * 10 bits (1 start, 8 data, 1 stop) at 460800 baud)
+          startTimerInterval(0.000217); 
           
           loop_step = start_rawx; // start rawx messages
         }

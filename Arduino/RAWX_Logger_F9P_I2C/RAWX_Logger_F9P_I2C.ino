@@ -131,7 +131,7 @@ bool stop_pressed = false; // Flag to indicate if stop switch was pressed to sto
 // https://gist.github.com/jdneo/43be30d85080b175cb5aed3500d3f989
 // That way, we do not need to increase the size of the Serial1 receive buffer (by editing RingBuffer.h)
 // You can use DEBUGserialBuffer to determine how big the buffer should be. Increase it if you see bufAvail get close to or reach the buffer size.
-RingBufferN<32786> SerialBuffer; // Define SerialBuffer as a RingBuffer of size 32k bytes
+RingBufferN<24576> SerialBuffer; // Define SerialBuffer as a RingBuffer of size 24k bytes
 
 // Loop Steps
 #define init          0
@@ -1017,6 +1017,9 @@ void loop() // run over and over again
 #ifdef DEBUGserialBuffer
         if (bufAvail > maxSerialBufferAvailable) {
           maxSerialBufferAvailable = bufAvail;
+          Serial.print(rtc.getHours()); Serial.print("H"); // Show timestamp
+          Serial.print(rtc.getMinutes()); Serial.print("mn");
+          Serial.print(rtc.getSeconds()); Serial.print("s : ");
           Serial.print("Max bufAvail: ");
           Serial.println(maxSerialBufferAvailable);
         }

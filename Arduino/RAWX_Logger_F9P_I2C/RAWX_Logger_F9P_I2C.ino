@@ -16,11 +16,14 @@
 // Ensure the card is formatted as FAT32.
 
 // Changes to a new log file every INTERVAL minutes
-#define splitLog // comment this line if you don't want a new file every INTERVAL minutes
+bool splitLog = true; // set splitLog to false if you don't want a new file every INTERVAL minutes
 
 // Define how long we should log in minutes before changing to a new file
 // Sensible values are: 5, 10, 15, 20, 30, 60
 const int INTERVAL = 60;
+
+// Define how long we should log in minutes, after starting a delayed stop logging
+const int DELAYED_STOP = 1;
 
 // Define how long we should wait in msec (approx.) for residual RAWX data before closing the last log file
 // For a measurement rate of 4Hz (250msec), 300msec is a sensible value. i.e. slightly more than one measurement interval
@@ -47,6 +50,9 @@ const int dwell = 300;
 
 // Connect A3 (Digital Pin 17) to GND to select SURVEY_IN mode when in BASE mode
 #define SurveyInPin 17 // A3 / Digital Pin 17
+
+// Connect A4 (Digital Pin 18) to GND to stop logging with a delay (see DELAYED_STOP to set the duration)
+#define DelayedPin  A4 // A4 / Digital Pin 18
 
 // Include the SParkFun u-blox Library
 #include <Wire.h> //Needed for I2C to GPS
@@ -125,6 +131,8 @@ volatile bool alarmFlag = false; // RTC alarm (interrupt) flag
 int valfix = 0;
 
 bool stop_pressed = false; // Flag to indicate if stop switch was pressed to stop logging
+bool stop_delayed_pressed = false; // Flag to indicate if delayed stop switch is pressed to stop logging
+bool stop_delayed_active = false; // Flag to indicate if delayed stop is active
 
 // Define SerialBuffer as a large RingBuffer which we will use to store the Serial1 receive data
 // Actual Serial1 receive data will be copied into SerialBuffer by a timer interrupt
@@ -601,6 +609,9 @@ void setup()
   // initialise SurveyInPin (A3) as an input for the SURVEY_IN switch
   pinMode(SurveyInPin, INPUT_PULLUP);
 
+  // initialise DelayedPin (A4) as an input for the delayed_stop switch
+  pinMode(DelayedPin, INPUT_PULLUP);
+
   delay(10000); // Allow 10 sec for user to open serial monitor (Comment this line if required)
   //while (!Serial); // OR Wait for user to run python script or open serial monitor (Comment this line as required)
 
@@ -795,23 +806,7 @@ void loop() // run over and over again
           rtc.begin(); // Start the RTC
           rtc.setTime(i2cGPS.getHour(), i2cGPS.getMinute(), i2cGPS.getSecond()); // Set the time
           rtc.setDate(i2cGPS.getDay(), i2cGPS.getMonth(), i2cGPS.getYear() - 2000); // Set the date
-          rtc.setAlarmSeconds(0); // Set RTC Alarm Seconds to zero
-          uint8_t nextAlarmMin = (i2cGPS.getMinute()+INTERVAL); // Calculate next alarm minutes
-          uint8_t addHour = 0;
-          uint8_t nextAlarmHour = 0;
-          while (nextAlarmMin - 60 > 0) {  // Calculate hours to add
-            addHour += 1;
-            nextAlarmMin = nextAlarmMin - 60;
-          }
-          nextAlarmMin = nextAlarmMin % 60; // Correct hour rollover
-          nextAlarmHour = (i2cGPS.getHour() + addHour) % 24; // Correct day rollover
-          rtc.setAlarmHours(nextAlarmHour); // Set RTC Alarm Hours
-          rtc.setAlarmMinutes(nextAlarmMin); // Set RTC Alarm Minutes
-#ifdef splitLog
-          Serial.print("Next new file set to: "); Serial.print(nextAlarmHour); Serial.print("H"); Serial.println(nextAlarmMin);
-          rtc.enableAlarm(rtc.MATCH_HHMMSS); // Alarm Match on hours, minutes and seconds
-          rtc.attachInterrupt(alarmMatch); // Attach alarm interrupt
-#endif
+          set_Alarm(INTERVAL);
           // check if voltage is > LOWBAT(V), if not then don't try to log any data
           if (vbat < LOWBAT) {
             Serial.println("Low Battery!");
@@ -1269,13 +1264,13 @@ void loop() // run over and over again
               ubx_expected_checksum_A = ubx_expected_checksum_A & 0xff; // Limit checksums to 8-bits
               ubx_expected_checksum_B = ubx_expected_checksum_B & 0xff;
               ubx_nmea_state = looking_for_checksum_A; // If we have received length payload bytes, look for checksum bytes
-            }
+              }
           }
           break;
           case (looking_for_checksum_A): {
             ubx_checksum_A = c;
             ubx_nmea_state = looking_for_checksum_B;
-          }
+            }
           break;
           case (looking_for_checksum_B): {
             ubx_checksum_B = c;
@@ -1283,29 +1278,43 @@ void loop() // run over and over again
             if ((ubx_expected_checksum_A != ubx_checksum_A) or (ubx_expected_checksum_B != ubx_checksum_B)) {
               Serial.println("Panic!! UBX checksum error!");
               ubx_nmea_state = sync_lost;
+              }
             }
-          }
           break;
         }
       }
       else {
         // read battery voltage
         vbat = analogRead(A7) * (2.0 * 3.3 / 1023.0);
-      }
-      // Check if the stop button has been pressed or battery is low
-      // or if there has been an RTC alarm and it is time to open a new file
+        }
+      
+      
       if (digitalRead(swPin) == LOW) stop_pressed = true;
+      // Check if the stop button has been pressed or battery is low
       if ((stop_pressed == true) or (vbat < LOWBAT)) {
         loop_step = close_file; // now close the file
         break;
-      }
+        }
+      // Check if stop_ delay button has been pressed and stop_delayed is not already active
+      if ((digitalRead(DelayedPin) == LOW) and (stop_delayed_active != true)) {
+        stop_delayed_pressed = true;
+        stop_delayed_active = true;
+        set_Alarm(DELAYED_STOP);
+        }
+      // Check if stop_delayed ended
+      else if ((alarmFlag == true) and (stop_delayed_active == true)) {
+        stop_pressed = true; // set stop_pressed to true, or the logger would try to restart
+        loop_step = close_file; // now close the file
+        break;
+        }
+      // Check if there has been an RTC alarm and it is time to open a new file
       else if ((alarmFlag == true) and (ubx_nmea_state == looking_for_B5_dollar)) {
         loop_step = new_file; // now close the file and open a new one
         break;
-      }
+        }
       else if (ubx_nmea_state == sync_lost) {
         loop_step = restart_file; // Sync has been lost so stop RAWX messages and open a new file before restarting RAWX
-      }
+        }
     }
     break;
 
@@ -1735,3 +1744,28 @@ void loop() // run over and over again
     break;  
   }
 }
+
+void set_Alarm (int alarm_delay) {
+          uint8_t nextAlarmSecond = i2cGPS.getSecond(); // Next alarm second
+          uint8_t nextAlarmMin = (i2cGPS.getMinute()+alarm_delay); // Calculate next alarm minutes
+          uint8_t addHour = 0;
+          uint8_t nextAlarmHour = 0;
+          while (nextAlarmMin - 60 > 0) {  // Calculate hours to add
+            addHour += 1;
+            nextAlarmMin = nextAlarmMin - 60;
+            }
+          nextAlarmMin = nextAlarmMin % 60; // Correct hour rollover
+          nextAlarmHour = (i2cGPS.getHour() + addHour) % 24; // Correct day rollover
+          rtc.setAlarmHours(nextAlarmHour); // Set RTC Alarm Hours
+          rtc.setAlarmMinutes(nextAlarmMin); // Set RTC Alarm Minutes
+          rtc.setAlarmSeconds(nextAlarmSecond); // Set RTC Alarm Seconds
+          if (splitLog and !(stop_delayed_active)) Serial.print("Next new file set to: ");
+          if (stop_delayed_active) Serial.print("Logging stop at: ");
+
+          if (splitLog or stop_delayed_active) { // One condition is active to set alarm
+            Serial.print(nextAlarmHour); Serial.print("H"); Serial.print(nextAlarmMin);
+            Serial.print("mn"); Serial.print(nextAlarmSecond); Serial.println("s");
+            rtc.enableAlarm(rtc.MATCH_HHMMSS); // Alarm Match on hours, minutes and seconds
+            rtc.attachInterrupt(alarmMatch); // Attach alarm interrupt
+            }
+  }

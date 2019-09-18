@@ -1747,7 +1747,7 @@ void set_Alarm (int alarm_delay) {
           uint8_t nextAlarmMin = (i2cGPS.getMinute()+alarm_delay); // Calculate next alarm minutes
           uint8_t addHour = 0;
           uint8_t nextAlarmHour = 0;
-          while (nextAlarmMin - 60 > 0) {  // Calculate hours to add
+          while (nextAlarmMin - 60 >= 0) {  // Calculate hours to add
             addHour += 1;
             nextAlarmMin = nextAlarmMin - 60;
             }

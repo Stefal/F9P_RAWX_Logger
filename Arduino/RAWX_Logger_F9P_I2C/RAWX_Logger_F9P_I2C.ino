@@ -20,7 +20,7 @@ bool splitLog = true; // set splitLog to false if you don't want a new file ever
 
 // Define how long we should log in minutes before changing to a new file
 // Sensible values are: 5, 10, 15, 20, 30, 60
-const int INTERVAL = 60;
+const int INTERVAL = 5;
 
 // Define how long we should log in minutes, after starting a delayed stop logging
 const int DELAYED_STOP = 1;
@@ -955,7 +955,6 @@ void loop() // run over and over again
       }
 #else
       rawx_dataFile.timestamp(T_CREATE, (RTCyear+2000), RTCmonth, RTCday, RTChours, RTCminutes, RTCseconds);
-        Serial.println("File create timestamp set");
 #endif
 
       // Now that SD write is complete
@@ -1391,10 +1390,8 @@ void loop() // run over and over again
       // An RTC alarm was detected, so set the RTC alarm time to the next INTERVAL and loop back to open_file.
       // We only receive an RTC alarm on a minute mark, so it doesn't matter that the RTC seconds will have moved on at this point.
       alarmFlag = false; // Clear the RTC alarm flag
-      uint8_t rtc_mins = rtc.getMinutes(); // Read the RTC minutes
-      rtc_mins = rtc_mins + INTERVAL; // Add the INTERVAL to the RTC minutes
-      rtc_mins = rtc_mins % 60; // Correct for hour rollover
-      rtc.setAlarmMinutes(rtc_mins); // Set next alarm time (minutes only - hours are ignored)
+      set_Alarm(INTERVAL); // Set next alarm time
+
 #ifndef NoLED
 #ifdef NeoPixel
 #ifndef NoLogLED
@@ -1760,7 +1757,7 @@ void set_Alarm (int alarm_delay) {
           rtc.setAlarmMinutes(nextAlarmMin); // Set RTC Alarm Minutes
           rtc.setAlarmSeconds(nextAlarmSecond); // Set RTC Alarm Seconds
           if (splitLog and !(stop_delayed_active)) Serial.print("Next new file set to: ");
-          if (stop_delayed_active) Serial.print("Logging stop at: ");
+          if (stop_delayed_active) Serial.print("Logging will stop at: ");
 
           if (splitLog or stop_delayed_active) { // One condition is active to set alarm
             Serial.print(nextAlarmHour); Serial.print("H"); Serial.print(nextAlarmMin);

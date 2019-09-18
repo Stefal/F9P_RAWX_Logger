@@ -54,6 +54,9 @@ const int dwell = 300;
 // Connect A4 (Digital Pin 18) to GND to stop logging with a delay (see DELAYED_STOP to set the duration)
 #define DelayedPin  A4 // A4 / Digital Pin 18
 
+// Include the Low Power Arduino SAMD library
+#include <ArduinoLowPower.h>
+
 // Include the SParkFun u-blox Library
 #include <Wire.h> //Needed for I2C to GPS
 #include "SparkFun_Ublox_Arduino_Library.h" //http://librarymanager/All#SparkFun_Ublox_GPS
@@ -400,6 +403,19 @@ static uint8_t setUART2nmea_payload[] = {
   0x00, 0x01, 0x00, 0x00,
   0x02, 0x00, 0x76, 0x10,  0x01 };
 ubxPacket setUART2nmea = { 0x06, 0x8a,  9, 0, 0,  setUART2nmea_payload,  0, 0, false };
+
+
+// Put the F9P to sleep (backup mode)
+// UBX-CFG-VALSET message with key ID of (UBX-RXM-PMREQ)
+static uint8_t go2Sleep_payload[] = {
+  0x00, 0x00,
+  0x00, 0x00, 
+  0x00, 0x00, 0x00, 0x00,
+  0x02, 0x00, 0x00, 0x00,
+  0x08, 0x00, 0x00, 0x00 };
+ubxPacket go2Sleep = { 0x02, 0x41, 16, 0, 0, go2Sleep_payload, 0, 0, false };
+
+
 
 // ExtInt interrupt service routine
 void ExtInt() {
@@ -1552,12 +1568,14 @@ void loop() // run over and over again
 #ifndef NoLED
 #ifdef NeoPixel
         setLED(red); // Set the NeoPixel to red
-#else
-        digitalWrite(RedLED, HIGH); // Turn the red LED on
 #endif
 #endif
-        Serial.println("Waiting for reset...");
-        while(1); // Wait for reset
+        Serial.println("Put the F9P to sleep");
+        i2cGPS.sendCommand(go2Sleep);
+        digitalWrite(RedLED, LOW); // Turn the red LED off
+        digitalWrite(GreenLED, LOW); // Turn the green LED off
+        Serial.println("Put the Logger to sleep");
+        LowPower.deepSleep();
       }
       else {
         // Low battery was detected so wait for the battery to recover
@@ -1747,7 +1765,7 @@ void set_Alarm (int alarm_delay) {
           uint8_t nextAlarmMin = (i2cGPS.getMinute()+alarm_delay); // Calculate next alarm minutes
           uint8_t addHour = 0;
           uint8_t nextAlarmHour = 0;
-          while (nextAlarmMin - 60 > 0) {  // Calculate hours to add
+          while (nextAlarmMin - 60 >= 0) {  // Calculate hours to add
             addHour += 1;
             nextAlarmMin = nextAlarmMin - 60;
             }

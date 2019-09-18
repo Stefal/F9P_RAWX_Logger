@@ -16,14 +16,14 @@
 // Ensure the card is formatted as FAT32.
 
 // Changes to a new log file every INTERVAL minutes
-bool splitLog = true; // set splitLog to false if you don't want a new file every INTERVAL minutes
+bool splitLog = false; // set splitLog to false if you don't want a new file every INTERVAL minutes
 
 // Define how long we should log in minutes before changing to a new file
 // Sensible values are: 5, 10, 15, 20, 30, 60
 const int INTERVAL = 5;
 
 // Define how long we should log in minutes, after starting a delayed stop logging
-const int DELAYED_STOP = 1;
+const int DELAYED_STOP = 10;
 
 // Define how long we should wait in msec (approx.) for residual RAWX data before closing the last log file
 // For a measurement rate of 4Hz (250msec), 300msec is a sensible value. i.e. slightly more than one measurement interval

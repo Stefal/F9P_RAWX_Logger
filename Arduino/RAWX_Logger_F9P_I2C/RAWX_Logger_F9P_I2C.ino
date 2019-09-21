@@ -16,14 +16,14 @@
 // Ensure the card is formatted as FAT32.
 
 // Changes to a new log file every INTERVAL minutes
-bool splitLog = true; // set splitLog to false if you don't want a new file every INTERVAL minutes
+bool splitLog = false; // set splitLog to false if you don't want a new file every INTERVAL minutes
 
 // Define how long we should log in minutes before changing to a new file
 // Sensible values are: 5, 10, 15, 20, 30, 60
 const int INTERVAL = 5;
 
 // Define how long we should log in minutes, after starting a delayed stop logging
-const int DELAYED_STOP = 1;
+const int DELAYED_STOP = 10;
 
 // Define how long we should wait in msec (approx.) for residual RAWX data before closing the last log file
 // For a measurement rate of 4Hz (250msec), 300msec is a sensible value. i.e. slightly more than one measurement interval
@@ -293,12 +293,14 @@ ubxPacket setTALKERID = { 0x06, 0x8a,  9, 0, 0,  setTALKERID_payload,  0, 0, fal
 // UBX-CFG-VALSET message with a key ID of 0x30210001 (CFG-RATE-MEAS)
 static uint8_t setRATE_20Hz_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0x32, 0x00 };
 static uint8_t setRATE_10Hz_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0x64, 0x00 };
+static uint8_t setRATE_8Hz_4c_payload[]  = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30, 0x7d, 0x00, 0x02, 0x00, 0x21, 0x30, 0x04, 0x00 }; // 8hz meas, 4 cycles navigation
 static uint8_t setRATE_5Hz_payload[]  = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0xc8, 0x00 };
 static uint8_t setRATE_4Hz_payload[]  = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0xfa, 0x00 };
 static uint8_t setRATE_2Hz_payload[]  = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0xf4, 0x01 };
 static uint8_t setRATE_1Hz_payload[]  = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0xe8, 0x03 };
 ubxPacket setRATE_20Hz = { 0x06, 0x8a,  10, 0, 0,  setRATE_20Hz_payload,  0, 0, false };
 ubxPacket setRATE_10Hz = { 0x06, 0x8a,  10, 0, 0,  setRATE_10Hz_payload,  0, 0, false };
+ubxPacket setRATE_8Hz = { 0x06, 0x8a,  16, 0, 0,  setRATE_8Hz_4c_payload,  0, 0, false };
 ubxPacket setRATE_5Hz = { 0x06, 0x8a,  10, 0, 0,  setRATE_5Hz_payload,  0, 0, false };
 ubxPacket setRATE_4Hz = { 0x06, 0x8a,  10, 0, 0,  setRATE_4Hz_payload,  0, 0, false };
 ubxPacket setRATE_2Hz = { 0x06, 0x8a,  10, 0, 0,  setRATE_2Hz_payload,  0, 0, false };
@@ -821,7 +823,8 @@ void loop() // run over and over again
 
           // Set the RAWX measurement rate
           //i2cGPS.sendCommand(setRATE_20Hz); // Set Navigation/Measurement Rate to 20 Hz
-          i2cGPS.sendCommand(setRATE_10Hz); // Set Navigation/Measurement Rate to 10 Hz
+          //i2cGPS.sendCommand(setRATE_10Hz); // Set Navigation/Measurement Rate to 10 Hz
+          i2cGPS.sendCommand(setRATE_8Hz); // Set Measurement Rate to 8 Hz, navigation to 2Hz
           //i2cGPS.sendCommand(setRATE_5Hz); // Set Navigation/Measurement Rate to 5 Hz
           //i2cGPS.sendCommand(setRATE_4Hz); // Set Navigation/Measurement Rate to 4 Hz
           //i2cGPS.sendCommand(setRATE_2Hz); // Set Navigation/Measurement Rate to 2 Hz

@@ -87,10 +87,6 @@ SFE_UBLOX_GPS i2cGPS;
 #define LED_Brightness 32 // 0 - 255 for WB2812B
 #endif
 
-// this keeps track of whether we're using the interrupt
-// off by default!
-boolean usingInterrupt = false;
-
 // Fast SD card logging using Bill Greiman's SdFat
 // https://github.com/greiman/SdFat
 // From FatFile.h:
@@ -175,33 +171,24 @@ int ubx_expected_checksum_A = 0;
 int ubx_expected_checksum_B = 0;
 
 // Definitions for u-blox F9P UBX-format (binary) messages
-// As a temporary fix, until multi-setVal is available, these messages are defined in SparkFun ubxPacket format:
-// Class, ID, Length, Counter, startingSpot, [payload], checksumA, checksumB, valid
-// ** Make sure that Length matches the payload length **
-// As these are all UBX-CFG-VALSET messages, the Class is always 0x06 and the ID is always 0x8a
-// The payload format is:
-// version, layers, reserved, reserved, key1, value1, key2, value2...
-// version is 0
-// layers: 0x01 for RAM, 0x02 for BBR, 0x04 for Flash. Setting layers to 0x07 would set the value in RAM, BBR and Flash
-// The VALSET message can hold a maximum of 64 key and value pairs
-// The sendCommand calls used to transmit each message will timeout as the commandAck checking in processUBXpacket expects the packet to be defined in packetCfg, not our custom packet!
-// Turn on DEBUG to see if the commands are acknowledged (Received: CLS:5 ID:1 Payload: 6 8A) or not acknowledged (CLS:5 ID:0)
 
 // Disable NMEA output on the I2C port
 // UBX-CFG-VALSET message with a key ID of 0x10720002 (CFG-I2COUTPROT-NMEA) and a value of 0
-// Setting is updated in RAM only
-static uint8_t disableI2cNMEA_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x02, 0x00, 0x72, 0x10,  0x00 };
-ubxPacket disableI2cNMEA = { 0x06, 0x8a,  9, 0, 0,  disableI2cNMEA_payload,  0, 0, false };
+uint8_t disableI2cNMEA() {
+  return i2cGPS.setVal8(0x10720002, 0x00, VAL_LAYER_RAM);
+}
 
 // Set UART1 to 230400 Baud
 // UBX-CFG-VALSET message with a key ID of 0x40520001 (CFG-UART1-BAUDRATE) and a value of 0x00038400 (230400 decimal)
-static uint8_t setUART1BAUD_payload_230400[] = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x52, 0x40,  0x00, 0x84, 0x03, 0x00 };
-ubxPacket setUART1BAUD_230400 = { 0x06, 0x8a,  12, 0, 0,  setUART1BAUD_payload_230400,  0, 0, false };
+uint8_t setUART1BAUD_230400() {
+  return i2cGPS.setVal32(0x40520001, 0x00038400, VAL_LAYER_RAM);
+}
 
 // Set UART1 to 460800 Baud
 // UBX-CFG-VALSET message with a key ID of 0x40520001 (CFG-UART1-BAUDRATE) and a value of 0x00070800 (460800 decimal)
-static uint8_t setUART1BAUD_payload_460800[] = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x52, 0x40,  0x00, 0x08, 0x07, 0x00 };
-ubxPacket setUART1BAUD_460800 = { 0x06, 0x8a,  12, 0, 0,  setUART1BAUD_payload_460800,  0, 0, false };
+uint8_t setUART1BAUD_460800() {
+  return i2cGPS.setVal32(0x40520001, 0x00070800, VAL_LAYER_RAM);
+}
 
 // setRAWXoff: this is the message which disables all of the messages being logged to SD card
 // It also clears the NMEA high precision mode for the GPGGA message
@@ -217,18 +204,17 @@ ubxPacket setUART1BAUD_460800 = { 0x06, 0x8a,  12, 0, 0,  setUART1BAUD_payload_4
 // 0x209100bb (CFG-MSGOUT-NMEA_ID_GGA_UART1)
 // and values (rates) of zero
 // 0x20930031 (CFG-NMEA-MAINTALKERID) has value 1 (GP)
-static uint8_t setRAWXoff_payload[] = {
-  0x00, 0x01, 0x00, 0x00,           // version, layers, reserved, reserved
-  0xa5, 0x02, 0x91, 0x20,  0x00,    // CFG-MSGOUT-UBX_RXM_RAWX_UART1
-  0x32, 0x02, 0x91, 0x20,  0x00,    // CFG-MSGOUT-UBX_RXM_SFRBX_UART1
-  0x79, 0x01, 0x91, 0x20,  0x00,    // CFG-MSGOUT-UBX_TIM_TM2_UART1
-  0x2a, 0x00, 0x91, 0x20,  0x00,    // CFG-MSGOUT-UBX_NAV_POSLLH_UART1
-  0x07, 0x00, 0x91, 0x20,  0x00,    // CFG-MSGOUT-UBX_NAV_PVT_UART1
-  0x1b, 0x00, 0x91, 0x20,  0x00,    // CFG-MSGOUT-UBX_NAV_STATUS_UART1
-  0x31, 0x00, 0x93, 0x20,  0x01,    // CFG-NMEA-MAINTALKERID : This line sets the main talker ID to GP
-  0x06, 0x00, 0x93, 0x10,  0x00,    // CFG-NMEA-HIGHPREC : This line disables NMEA high precision mode
-  0xbb, 0x00, 0x91, 0x20,  0x00 };  // CFG-MSGOUT-NMEA_ID_GGA_UART1 : This line disables the GGA message
-ubxPacket setRAWXoff = { 0x06, 0x8a,  49, 0, 0,  setRAWXoff_payload,  0, 0, false };
+uint8_t setRAWXoff() {
+  i2cGPS.newCfgValset8(0x209102a5, 0x00, VAL_LAYER_RAM);    // CFG-MSGOUT-UBX_RXM_RAWX_UART1
+  i2cGPS.addCfgValset8(0x20910232, 0x00);    // CFG-MSGOUT-UBX_RXM_SFRBX_UART1
+  i2cGPS.addCfgValset8(0x20910179, 0x00);    // CFG-MSGOUT-UBX_TIM_TM2_UART1
+  i2cGPS.addCfgValset8(0x2091002a, 0x00);    // CFG-MSGOUT-UBX_NAV_POSLLH_UART1
+  i2cGPS.addCfgValset8(0x20910007, 0x00);    // CFG-MSGOUT-UBX_NAV_PVT_UART1
+  i2cGPS.addCfgValset8(0x2091001b, 0x00);    // CFG-MSGOUT-UBX_NAV_STATUS_UART1
+  i2cGPS.addCfgValset8(0x20930031, 0x01);    // CFG-NMEA-MAINTALKERID : This line sets the main talker ID to GP
+  i2cGPS.addCfgValset8(0x10930006, 0x00);    // CFG-NMEA-HIGHPREC : This line disables NMEA high precision mode
+  return i2cGPS.sendCfgValset8(0x209100bb, 0x00);  // CFG-MSGOUT-NMEA_ID_GGA_UART1 : This line disables the GGA message
+}
 
 // setRAWXon: this is the message which enables all of the messages to be logged to SD card in one go
 // It also sets the NMEA high precision mode for the GNGGA message
@@ -244,20 +230,19 @@ ubxPacket setRAWXoff = { 0x06, 0x8a,  49, 0, 0,  setRAWXoff_payload,  0, 0, fals
 // 0x209100bb (CFG-MSGOUT-NMEA_ID_GGA_UART1)
 // and values (rates) of 1
 // 0x20930031 (CFG-NMEA-MAINTALKERID) has value 3 (GN)
-static uint8_t setRAWXon_payload[] = {
-  0x00, 0x01, 0x00, 0x00,
-  0xa5, 0x02, 0x91, 0x20,  0x01,
-  0x32, 0x02, 0x91, 0x20,  0x01,
-  0x79, 0x01, 0x91, 0x20,  0x01,
-  0x2a, 0x00, 0x91, 0x20,  0x01,   // Change the last byte from 0x01 to 0x00 to leave NAV_POSLLH disabled
-  0x07, 0x00, 0x91, 0x20,  0x01,   // Change the last byte from 0x01 to 0x00 to leave NAV_PVT disabled
-  0x1b, 0x00, 0x91, 0x20,  0x01,   // This line enables the NAV_STATUS message
-  0x31, 0x00, 0x93, 0x20,  0x03,   // This line sets the main talker ID to GN
-  0x06, 0x00, 0x93, 0x10,  0x01,   // This sets the NMEA high precision mode
-  0xbb, 0x00, 0x91, 0x20,  0x01 }; // This (re)enables the GGA mesage
-ubxPacket setRAWXon = { 0x06, 0x8a,  49, 0, 0,  setRAWXon_payload,  0, 0, false };
+uint8_t setRAWXon() {
+  i2cGPS.newCfgValset8(0x209102a5, 0x01, VAL_LAYER_RAM);
+  i2cGPS.addCfgValset8(0x20910232, 0x01);
+  i2cGPS.addCfgValset8(0x20910179, 0x01);
+  i2cGPS.addCfgValset8(0x2091002a, 0x00);   // Change the last byte from 0x01 to 0x00 to leave NAV_POSLLH disabled
+  i2cGPS.addCfgValset8(0x20910007, 0x01);   // Change the last byte from 0x01 to 0x00 to leave NAV_PVT disabled
+  i2cGPS.addCfgValset8(0x2091001b, 0x01);   // This line enables the NAV_STATUS message
+  i2cGPS.addCfgValset8(0x20930031, 0x03);   // This line sets the main talker ID to GN
+  i2cGPS.addCfgValset8(0x10930006, 0x01);   // This sets the NMEA high precision mode
+  return i2cGPS.sendCfgValset8(0x209100bb, 0x01); // This (re)enables the GGA mesage
+}
 
-// Enable the NMEA GGA and RMC messages and disable the GLL, GSA, GSV, VTG, and TXT(INF) messages
+// Enable the NMEA GGA and RMC messages on UART1
 // UBX-CFG-VALSET message with key IDs of:
 // 0x209100ca (CFG-MSGOUT-NMEA_ID_GLL_UART1)
 // 0x209100c0 (CFG-MSGOUT-NMEA_ID_GSA_UART1)
@@ -266,98 +251,94 @@ ubxPacket setRAWXon = { 0x06, 0x8a,  49, 0, 0,  setRAWXon_payload,  0, 0, false 
 // 0x20920007 (CFG-INFMSG-NMEA_UART1)
 // 0x209100bb (CFG-MSGOUT-NMEA_ID_GGA_UART1)
 // 0x209100ac (CFG-MSGOUT-NMEA_ID_RMC_UART1)
-static uint8_t setNMEAon_payload[] = {
-  0x00, 0x01, 0x00, 0x00,
-  0xca, 0x00, 0x91, 0x20,  0x00,
-  0xc0, 0x00, 0x91, 0x20,  0x00,
-  0xc5, 0x00, 0x91, 0x20,  0x00,
-  0xb1, 0x00, 0x91, 0x20,  0x00,
-  0x07, 0x00, 0x92, 0x20,  0x00,
-  0xbb, 0x00, 0x91, 0x20,  0x01,
-  0xac, 0x00, 0x91, 0x20,  0x01 };
-ubxPacket setNMEAon = { 0x06, 0x8a,  39, 0, 0,  setNMEAon_payload,  0, 0, false };
+uint8_t setNMEAon() {
+  i2cGPS.newCfgValset8(0x209100ca, 0x00, VAL_LAYER_RAM);
+  i2cGPS.addCfgValset8(0x209100c0, 0x00);
+  i2cGPS.addCfgValset8(0x209100c5, 0x00);
+  i2cGPS.addCfgValset8(0x209100b1, 0x00);
+  i2cGPS.addCfgValset8(0x20920007, 0x00);
+  i2cGPS.addCfgValset8(0x209100bb, 0x01);
+  return i2cGPS.sendCfgValset8(0x209100ac, 0x01);
+}
 
-// Disable the NMEA GGA and RMC messages
+// Disable the NMEA messages
 // UBX-CFG-VALSET message with key IDs of:
+// 0x209100ca (CFG-MSGOUT-NMEA_ID_GLL_UART1)
+// 0x209100c0 (CFG-MSGOUT-NMEA_ID_GSA_UART1)
+// 0x209100c5 (CFG-MSGOUT-NMEA_ID_GSV_UART1)
+// 0x209100b1 (CFG-MSGOUT-NMEA_ID_VTG_UART1)
+// 0x20920007 (CFG-INFMSG-NMEA_UART1)
 // 0x209100bb (CFG-MSGOUT-NMEA_ID_GGA_UART1)
 // 0x209100ac (CFG-MSGOUT-NMEA_ID_RMC_UART1)
-static uint8_t setNMEAoff_payload[] = {
-  0x00, 0x01, 0x00, 0x00,
-  0xbb, 0x00, 0x91, 0x20,  0x00,
-  0xac, 0x00, 0x91, 0x20,  0x00 };
-ubxPacket setNMEAoff = { 0x06, 0x8a,  14, 0, 0,  setNMEAoff_payload,  0, 0, false };
+uint8_t setNMEAoff() {
+  i2cGPS.newCfgValset8(0x209100ca, 0x00, VAL_LAYER_RAM);
+  i2cGPS.addCfgValset8(0x209100c0, 0x00);
+  i2cGPS.addCfgValset8(0x209100c5, 0x00);
+  i2cGPS.addCfgValset8(0x209100b1, 0x00);
+  i2cGPS.addCfgValset8(0x20920007, 0x00);
+  i2cGPS.addCfgValset8(0x209100bb, 0x00);
+  return i2cGPS.sendCfgValset8(0x209100ac, 0x00);
+}
 
 // Set the Main NMEA Talker ID to "GP"
 // UBX-CFG-VALSET message with a key ID of 0x20930031 (CFG-NMEA-MAINTALKERID) and a value of 1 (GP):
-static uint8_t setTALKERID_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x31, 0x00, 0x93, 0x20,  0x01 };
-ubxPacket setTALKERID = { 0x06, 0x8a,  9, 0, 0,  setTALKERID_payload,  0, 0, false };
+uint8_t setTALKERID() {
+  return i2cGPS.setVal8(0x20930031, 0x01, VAL_LAYER_RAM);
+}
 
 // Set the measurement rate
 // UBX-CFG-VALSET message with a key ID of 0x30210001 (CFG-RATE-MEAS)
-static uint8_t setRATE_20Hz_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0x32, 0x00 };
-static uint8_t setRATE_10Hz_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0x64, 0x00 };
-static uint8_t setRATE_8Hz_4c_payload[]  = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30, 0x7d, 0x00, 0x02, 0x00, 0x21, 0x30, 0x04, 0x00 }; // 8hz meas, 4 cycles navigation
-static uint8_t setRATE_5Hz_payload[]  = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0xc8, 0x00 };
-static uint8_t setRATE_4Hz_payload[]  = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0xfa, 0x00 };
-static uint8_t setRATE_2Hz_payload[]  = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0xf4, 0x01 };
-static uint8_t setRATE_1Hz_payload[]  = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x21, 0x30,  0xe8, 0x03 };
-ubxPacket setRATE_20Hz = { 0x06, 0x8a,  10, 0, 0,  setRATE_20Hz_payload,  0, 0, false };
-ubxPacket setRATE_10Hz = { 0x06, 0x8a,  10, 0, 0,  setRATE_10Hz_payload,  0, 0, false };
-ubxPacket setRATE_8Hz = { 0x06, 0x8a,  16, 0, 0,  setRATE_8Hz_4c_payload,  0, 0, false };
-ubxPacket setRATE_5Hz = { 0x06, 0x8a,  10, 0, 0,  setRATE_5Hz_payload,  0, 0, false };
-ubxPacket setRATE_4Hz = { 0x06, 0x8a,  10, 0, 0,  setRATE_4Hz_payload,  0, 0, false };
-ubxPacket setRATE_2Hz = { 0x06, 0x8a,  10, 0, 0,  setRATE_2Hz_payload,  0, 0, false };
-ubxPacket setRATE_1Hz = { 0x06, 0x8a,  10, 0, 0,  setRATE_1Hz_payload,  0, 0, false };
+uint8_t setRATE_20Hz() { return i2cGPS.setVal16(0x30210001, 0x0032, VAL_LAYER_RAM); }
+uint8_t setRATE_10Hz() { return i2cGPS.setVal16(0x30210001, 0x0064, VAL_LAYER_RAM); }
+uint8_t setRATE_8Hz() { return i2cGPS.setVal16(0x30210001, 0x007d, VAL_LAYER_RAM); }
+uint8_t setRATE_8Hz_4c() { i2cGPS.newCfgValset16(0x30210001, 0x007d, VAL_LAYER_RAM);
+                          return i2cGPS.sendCfgValset16(0x30210002, 0x4);
+                         } // need tests
+uint8_t setRATE_5Hz() { return i2cGPS.setVal16(0x30210001, 0x00c8, VAL_LAYER_RAM); }
+uint8_t setRATE_4Hz() { return i2cGPS.setVal16(0x30210001, 0x00fa, VAL_LAYER_RAM); }
+uint8_t setRATE_2Hz() { return i2cGPS.setVal16(0x30210001, 0x01f4, VAL_LAYER_RAM); }
+uint8_t setRATE_1Hz() { return i2cGPS.setVal16(0x30210001, 0x03e8, VAL_LAYER_RAM); }
 
 // Set the navigation dynamic model
 // UBX-CFG-VALSET message with a key ID of 0x20110021 (CFG-NAVSPG-DYNMODEL)
-static uint8_t setNAVportable_payload[]   = { 0x00, 0x01, 0x00, 0x00,  0x21, 0x00, 0x11, 0x20,  0x00 };
-static uint8_t setNAVstationary_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x21, 0x00, 0x11, 0x20,  0x02 };
-static uint8_t setNAVpedestrian_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x21, 0x00, 0x11, 0x20,  0x03 };
-static uint8_t setNAVautomotive_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x21, 0x00, 0x11, 0x20,  0x04 };
-static uint8_t setNAVsea_payload[]        = { 0x00, 0x01, 0x00, 0x00,  0x21, 0x00, 0x11, 0x20,  0x05 };
-static uint8_t setNAVair1g_payload[]      = { 0x00, 0x01, 0x00, 0x00,  0x21, 0x00, 0x11, 0x20,  0x06 };
-static uint8_t setNAVair2g_payload[]      = { 0x00, 0x01, 0x00, 0x00,  0x21, 0x00, 0x11, 0x20,  0x07 };
-static uint8_t setNAVair4g_payload[]      = { 0x00, 0x01, 0x00, 0x00,  0x21, 0x00, 0x11, 0x20,  0x08 };
-static uint8_t setNAVwrist_payload[]      = { 0x00, 0x01, 0x00, 0x00,  0x21, 0x00, 0x11, 0x20,  0x09 };
-ubxPacket setNAVportable = { 0x06, 0x8a,  9, 0, 0,  setNAVportable_payload,  0, 0, false };
-ubxPacket setNAVstationary = { 0x06, 0x8a,  9, 0, 0,  setNAVstationary_payload,  0, 0, false };
-ubxPacket setNAVpedestrian = { 0x06, 0x8a,  9, 0, 0,  setNAVpedestrian_payload,  0, 0, false };
-ubxPacket setNAVautomotive = { 0x06, 0x8a,  9, 0, 0,  setNAVautomotive_payload,  0, 0, false };
-ubxPacket setNAVsea = { 0x06, 0x8a,  9, 0, 0,  setNAVsea_payload,  0, 0, false };
-ubxPacket setNAVair1g = { 0x06, 0x8a,  9, 0, 0,  setNAVair1g_payload,  0, 0, false };
-ubxPacket setNAVair2g = { 0x06, 0x8a,  9, 0, 0,  setNAVair2g_payload,  0, 0, false };
-ubxPacket setNAVair4g = { 0x06, 0x8a,  9, 0, 0,  setNAVair4g_payload,  0, 0, false };
-ubxPacket setNAVwrist = { 0x06, 0x8a,  9, 0, 0,  setNAVwrist_payload,  0, 0, false };
+uint8_t setNAVportable() { return i2cGPS.setVal8(0x20110021, 0x00, VAL_LAYER_RAM); };
+uint8_t setNAVstationary() { return i2cGPS.setVal8(0x20110021, 0x02, VAL_LAYER_RAM); };
+uint8_t setNAVpedestrian() { return i2cGPS.setVal8(0x20110021, 0x03, VAL_LAYER_RAM); };
+uint8_t setNAVautomotive() { return i2cGPS.setVal8(0x20110021, 0x04, VAL_LAYER_RAM); };
+uint8_t setNAVsea() { return i2cGPS.setVal8(0x20110021, 0x05, VAL_LAYER_RAM); };
+uint8_t setNAVair1g() { return i2cGPS.setVal8(0x20110021, 0x06, VAL_LAYER_RAM); };
+uint8_t setNAVair2g() { return i2cGPS.setVal8(0x20110021, 0x07, VAL_LAYER_RAM); };
+uint8_t setNAVair4g() { return i2cGPS.setVal8(0x20110021, 0x08, VAL_LAYER_RAM); };
+uint8_t setNAVwrist() { return i2cGPS.setVal8(0x20110021, 0x09, VAL_LAYER_RAM); };
 
 // Set UART2 to 230400 Baud
 // UBX-CFG-VALSET message with a key ID of 0x40530001 (CFG-UART2-BAUDRATE) and a value of 0x00038400 (230400 decimal)
-static uint8_t setUART2BAUD_230400_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x53, 0x40,  0x00, 0x84, 0x03, 0x00 };
-ubxPacket setUART2BAUD_230400 = { 0x06, 0x8a,  12, 0, 0,  setUART2BAUD_230400_payload,  0, 0, false };
+uint8_t setUART2BAUD_230400() {
+  return i2cGPS.setVal32(0x40530001, 0x00038400, VAL_LAYER_RAM);
+}
 
 // Set UART2 to 115200 Baud
 // UBX-CFG-VALSET message with a key ID of 0x40530001 (CFG-UART2-BAUDRATE) and a value of 0x0001c200 (115200 decimal)
-static uint8_t setUART2BAUD_115200_payload[] = { 0x00, 0x01, 0x00, 0x00,  0x01, 0x00, 0x53, 0x40,  0x00, 0xc2, 0x01, 0x00 };
-ubxPacket setUART2BAUD_115200 = { 0x06, 0x8a,  12, 0, 0,  setUART2BAUD_115200_payload,  0, 0, false };
+uint8_t setUART2BAUD_115200() {
+  return i2cGPS.setVal32(0x40530001, 0x0001c200, VAL_LAYER_RAM);
+}
 
 // Set Survey_In mode
 // UBX-CFG-VALSET message with a key IDs and values of:
 // 0x20030001 (CFG-TMODE-MODE) and a value of 1
 // 0x40030011 (CFG-TMODE-SVIN_ACC_LIMIT) and a value of 0x0000c350 (50000 decimal = 5 m)
 // 0x40030010 (CFG-TMODE-SVIN_MIN_DUR) and a value of 0x0000003c (60 decimal = 1 min)
-static uint8_t setSurveyIn_payload[] = {
-  0x00, 0x01, 0x00, 0x00,
-  0x01, 0x00, 0x03, 0x20,  0x01,
-  0x11, 0x00, 0x03, 0x40,  0x50, 0xc3, 0x00, 0x00,
-  0x10, 0x00, 0x03, 0x40,  0x3c, 0x00, 0x00, 0x00 };
-ubxPacket setSurveyIn = { 0x06, 0x8a,  25, 0, 0,  setSurveyIn_payload,  0, 0, false };
+uint8_t setSurveyIn() {
+  i2cGPS.newCfgValset8(0x20030001, 0x01, VAL_LAYER_RAM);
+  i2cGPS.addCfgValset32(0x40030011, 0x0000c350);
+  return i2cGPS.sendCfgValset32(0x40030010, 0x0000003c);
+}
 
 // Disable Survey_In mode
 // UBX-CFG-VALSET message with a key ID of 0x20030001 (CFG-TMODE-MODE) and a value of 0
-static uint8_t disableSurveyIn_payload[] = {
-  0x00, 0x01, 0x00, 0x00,
-  0x01, 0x00, 0x03, 0x20,  0x00 };
-ubxPacket disableSurveyIn = { 0x06, 0x8a,  9, 0, 0,  disableSurveyIn_payload,  0, 0, false };
+uint8_t disableSurveyIn() {
+  return i2cGPS.setVal8(0x20030001, 0x00, VAL_LAYER_RAM);
+}
 
 // Enable RTCM message output on UART2
 // UBX-CFG-VALSET message with the following key IDs
@@ -369,15 +350,14 @@ ubxPacket disableSurveyIn = { 0x06, 0x8a,  9, 0, 0,  disableSurveyIn_payload,  0
 // 0x209102d8 (CFG-MSGOUT-RTCM_3X_TYPE1127_UART2)
 // 0x2091031a (CFG-MSGOUT-RTCM_3X_TYPE1097_UART2)
 // 0x20910305 (CFG-MSGOUT-RTCM_3X_TYPE1230_UART2)
-static uint8_t setRTCMon_payload[] = {
-  0x00, 0x01, 0x00, 0x00,
-  0xbf, 0x02, 0x91, 0x20,  0x04, // Change the last byte from 0x01 to 0x04 to send an RTCM message at 1/4 RATE_MEAS
-  0xce, 0x02, 0x91, 0x20,  0x04, // Change the last byte from 0x01 to 0x04 to send an RTCM message at 1/4 RATE_MEAS
-  0xd3, 0x02, 0x91, 0x20,  0x04, // Change the last byte from 0x01 to 0x04 to send an RTCM message at 1/4 RATE_MEAS
-  0xd8, 0x02, 0x91, 0x20,  0x04, // Change the last byte from 0x01 to 0x04 to send an RTCM message at 1/4 RATE_MEAS
-  0x1a, 0x03, 0x91, 0x20,  0x04, // Change the last byte from 0x01 to 0x04 to send an RTCM message at 1/4 RATE_MEAS
-  0x05, 0x03, 0x91, 0x20,  0x28 };  // Change the last byte from 0x01 to 0x28 to send an RTCM message at 1/40 RATE_MEAS
-ubxPacket setRTCMon = { 0x06, 0x8a,  34, 0, 0,  setRTCMon_payload,  0, 0, false };
+uint8_t setRTCMon() {
+  i2cGPS.newCfgValset8(0x209102bf, 0x04, VAL_LAYER_RAM);
+  i2cGPS.addCfgValset8(0x209102ce, 0x04);
+  i2cGPS.addCfgValset8(0x209102d3, 0x04);
+  i2cGPS.addCfgValset8(0x209102d8, 0x04);
+  i2cGPS.addCfgValset8(0x2091031a, 0x04);
+  return i2cGPS.sendCfgValset8(0x20910305, 0x28);
+}
 
 // Disable RTCM message output on UART2
 // UBX-CFG-VALSET message with the following key IDs and values of 0:
@@ -387,29 +367,26 @@ ubxPacket setRTCMon = { 0x06, 0x8a,  34, 0, 0,  setRTCMon_payload,  0, 0, false 
 // 0x209102d8 (CFG-MSGOUT-RTCM_3X_TYPE1127_UART2)
 // 0x2091031a (CFG-MSGOUT-RTCM_3X_TYPE1097_UART2)
 // 0x20910305 (CFG-MSGOUT-RTCM_3X_TYPE1230_UART2)
-static uint8_t setRTCMoff_payload[] = {
-  0x00, 0x01, 0x00, 0x00,
-  0xbf, 0x02, 0x91, 0x20,  0x00,
-  0xce, 0x02, 0x91, 0x20,  0x00,
-  0xd3, 0x02, 0x91, 0x20,  0x00,
-  0xd8, 0x02, 0x91, 0x20,  0x00,
-  0x1a, 0x03, 0x91, 0x20,  0x00,
-  0x05, 0x03, 0x91, 0x20,  0x00 };
-ubxPacket setRTCMoff = { 0x06, 0x8a,  34, 0, 0,  setRTCMoff_payload,  0, 0, false };
+uint8_t setRTCMoff() {
+  i2cGPS.newCfgValset8(0x209102bf, 0x00, VAL_LAYER_RAM);
+  i2cGPS.addCfgValset8(0x209102ce, 0x00);
+  i2cGPS.addCfgValset8(0x209102d3, 0x00);
+  i2cGPS.addCfgValset8(0x209102d8, 0x00);
+  i2cGPS.addCfgValset8(0x2091031a, 0x00);
+  return i2cGPS.sendCfgValset8(0x20910305, 0x00);
+}
 
 // Set TimeGrid for TP1 to GPS (instead of UTC) so TIM_TM2 messages are aligned with GPS time
 // UBX-CFG-VALSET message with the key ID 0x2005000c (CFG-TP-TIMEGRID_TP1) and value of 1 (GPS):
-static uint8_t setTimeGrid_payload[] = {
-  0x00, 0x01, 0x00, 0x00,
-  0x0c, 0x00, 0x05, 0x20,  0x01 };
-ubxPacket setTimeGrid = { 0x06, 0x8a,  9, 0, 0,  setTimeGrid_payload,  0, 0, false };
+uint8_t setTimeGrid() {
+  return i2cGPS.setVal8(0x2005000c, 0x01, VAL_LAYER_RAM);
+}
 
 // Enable NMEA messages on UART2 for test purposes
 // UBX-CFG-VALSET message with key ID of 0x10760002 (CFG-UART2OUTPROT-NMEA) and value of 1:
-static uint8_t setUART2nmea_payload[] = {
-  0x00, 0x01, 0x00, 0x00,
-  0x02, 0x00, 0x76, 0x10,  0x01 };
-ubxPacket setUART2nmea = { 0x06, 0x8a,  9, 0, 0,  setUART2nmea_payload,  0, 0, false };
+uint8_t setUART2nmea() {
+  return i2cGPS.setVal8(0x10760002, 0x01, VAL_LAYER_RAM);
+}
 
 
 // Put the F9P to sleep (backup mode)
@@ -682,39 +659,59 @@ void setup()
   Serial.println(F("Ublox GNSS found!"));
 
 #ifdef DEBUG
-  //i2cGPS.enableDebugging(); //Enable debug messages over Serial (default)
+#ifdef DEBUGi2c
+  i2cGPS.enableDebugging(); //Enable debug messages over Serial (default)
+#endif
 #endif
 
   // These sendCommands will timeout as the commandAck checking in processUBXpacket expects the packet to be in packetCfg, not our custom packet!
   // Turn on DEBUG to see if the commands are acknowledged (Received: CLS:5 ID:1 Payload: 6 8A) or not acknowledged (CLS:5 ID:0)
-  i2cGPS.sendCommand(disableI2cNMEA); //Disable NMEA messages on the I2C port leaving it clear for UBX messages
-  i2cGPS.sendCommand(setNMEAoff); // Disable NMEA messages (need testing, it seems it doesn't disable NMEA output on UART1)
-  i2cGPS.sendCommand(setUART1BAUD_460800); // Change the UART1 baud rate to 460800
-  i2cGPS.sendCommand(setRAWXoff); // Disable RAWX messages (on UART1). Also disables the NMEA high precision mode
-  i2cGPS.sendCommand(setRATE_1Hz); // Set Navigation/Measurement Rate to 1Hz
-  i2cGPS.sendCommand(setUART2BAUD_115200); // Set UART2 Baud rate
-  i2cGPS.sendCommand(disableSurveyIn); // Disable Survey_In mode
-  i2cGPS.sendCommand(setRTCMoff); // Disable RTCM output on UART2
-  i2cGPS.sendCommand(setTimeGrid); // Set the TP1 TimeGrid to GPS so TIM_TM2 messages are aligned with GPS time
+
+  boolean response = true;
+  response &= disableI2cNMEA(); //Disable NMEA messages on the I2C port leaving it clear for UBX messages
+  response &= setUART1BAUD(); // Change the UART1 baud rate to 230400
+  response &= setRAWXoff(); // Disable RAWX messages on UART1. Also disables the NMEA high precision mode
+  response &= setNMEAoff(); // Disable NMEA messages on UART1
+  response &= setTALKERID(); // Set NMEA TALKERID to GP
+  response &= setRATE_1Hz(); // Set Navigation/Measurement Rate to 1Hz
+  response &= setUART2BAUD_115200(); // Set UART2 Baud rate
+  response &= disableSurveyIn(); // Disable Survey_In mode
+  response &= setRTCMoff(); // Disable RTCM output on UART2
+  response &= setTimeGrid(); // Set the TP1 TimeGrid to GPS so TIM_TM2 messages are aligned with GPS time
+
+  if (response == false) {
+    Serial.println("Panic!! Unable to initialize GNSS!");
+    Serial.println("Waiting for reset...");
+#ifndef NoLED
+#ifdef NeoPixel
+    setLED(red); // Set NeoPixel to red
+#else
+    digitalWrite(RedLED, HIGH); // Turn red LED on
+#endif
+#endif
+    // don't do anything more:
+    while(1);
+  }
 
   // Check the modePin and set the navigation dynamic model
   if (digitalRead(modePin) == LOW) {
     Serial.println("BASE mode selected");
-    i2cGPS.sendCommand(setNAVstationary); // Set Static Navigation Mode (use this for the Base Logger)    
+    setNAVstationary(); // Set Static Navigation Mode (use this for the Base Logger)    
   }
   else {
     base_mode = false; // Clear base_mode flag
     Serial.println("ROVER mode selected");
     // Select one mode for the mobile Rover Logger
-    //i2cGPS.sendCommand(setNAVportable); // Set Portable Navigation Mode
-    //i2cGPS.sendCommand(setNAVpedestrian); // Set Pedestrian Navigation Mode
-    //i2cGPS.sendCommand(setNAVautomotive); // Set Automotive Navigation Mode
-    //i2cGPS.sendCommand(setNAVsea); // Set Sea Navigation Mode
-    i2cGPS.sendCommand(setNAVair1g); // Set Airborne <1G Navigation Mode
-    //i2cGPS.sendCommand(setNAVair2g); // Set Airborne <2G Navigation Mode
-    //i2cGPS.sendCommand(setNAVair4g); // Set Airborne <4G Navigation Mode
-    //i2cGPS.sendCommand(setNAVwrist); // Set Wrist Navigation Mode
+    //setNAVportable(); // Set Portable Navigation Mode
+    //setNAVpedestrian(); // Set Pedestrian Navigation Mode
+    //setNAVautomotive(); // Set Automotive Navigation Mode
+    //setNAVsea(); // Set Sea Navigation Mode
+    setNAVair1g(); // Set Airborne <1G Navigation Mode
+    //setNAVair2g(); // Set Airborne <2G Navigation Mode
+    //setNAVair4g(); // Set Airborne <4G Navigation Mode
+    //setNAVwrist(); // Set Wrist Navigation Mode
   }
+
   Serial1.begin(460800); // Start Serial1 at 460800 baud
   while(Serial1.available()){Serial1.read();} // Flush RX buffer so we don't confuse Adafruit_GPS with UBX acknowledgements
 
@@ -763,7 +760,7 @@ void loop() // run over and over again
 {
   switch(loop_step) {
     case init: {
-
+        delay(1000); //Don't pound too hard on the I2C bus
 #ifdef DEBUG
         Serial.print("\nTime: ");
         Serial.print(i2cGPS.getHour(), DEC); Serial.print(':');
@@ -788,36 +785,39 @@ void loop() // run over and over again
           Serial.print("Satellites: "); Serial.println((int)i2cGPS.getSIV());
           Serial.print("HDOP: "); Serial.println(i2cGPS.getPDOP() * 1E-2);
         }
+
 #endif
   
-        // read battery voltage
-        vbat = analogRead(A7) * (2.0 * 3.3 / 1023.0);
+      // read battery voltage
+      vbat = analogRead(A7) * (2.0 * 3.3 / 1023.0);
 #ifdef DEBUG
-        Serial.print("Battery(V): ");
-        Serial.println(vbat, 2);
+      Serial.print("Battery(V): ");
+      Serial.println(vbat, 2);
 #endif
       
+
+
         // turn green LED on to indicate GNSS fix
         // or set NeoPixel to cyan
         if (i2cGPS.getFixType() == 3) {
 #ifndef NoLED
 #ifdef NeoPixel
-          setLED(cyan); // Set NeoPixel to cyan
+        setLED(cyan); // Set NeoPixel to cyan
 #else
-          digitalWrite(GreenLED, HIGH);
+        digitalWrite(GreenLED, HIGH);
 #endif
 #endif
-          // increment valfix and cap at maxvalfix
-          // don't do anything fancy in terms of decrementing valfix as we want to keep logging even if the fix is lost
-          valfix += 1;
-          if (valfix > maxvalfix) valfix = maxvalfix;
-        }
-        else {
+        // increment valfix and cap at maxvalfix
+        // don't do anything fancy in terms of decrementing valfix as we want to keep logging even if the fix is lost
+        valfix += 1;
+        if (valfix > maxvalfix) valfix = maxvalfix;
+      }
+      else {
 #ifndef NoLED
 #ifdef NeoPixel
-          setLED(dim_cyan); // Set NeoPixel to dim cyan
+        setLED(dim_cyan); // Set NeoPixel to dim cyan
 #else
-          digitalWrite(GreenLED, LOW); // Turn green LED off
+        digitalWrite(GreenLED, LOW); // Turn green LED off
 #endif
 #endif
         }
@@ -830,33 +830,33 @@ void loop() // run over and over again
           rtc.setTime(i2cGPS.getHour(), i2cGPS.getMinute(), i2cGPS.getSecond()); // Set the time
           rtc.setDate(i2cGPS.getDay(), i2cGPS.getMonth(), i2cGPS.getYear() - 2000); // Set the date
           set_Alarm(INTERVAL);
+
           // check if voltage is > LOWBAT(V), if not then don't try to log any data
           if (vbat < LOWBAT) {
             Serial.println("Low Battery!");
             break;
           }
 
-
           // Set the RAWX measurement rate
-          //i2cGPS.sendCommand(setRATE_20Hz); // Set Navigation/Measurement Rate to 20 Hz
-          //i2cGPS.sendCommand(setRATE_10Hz); // Set Navigation/Measurement Rate to 10 Hz
-          i2cGPS.sendCommand(setRATE_8Hz); // Set Measurement Rate to 8 Hz, navigation to 2Hz
-          //i2cGPS.sendCommand(setRATE_5Hz); // Set Navigation/Measurement Rate to 5 Hz
-          //i2cGPS.sendCommand(setRATE_4Hz); // Set Navigation/Measurement Rate to 4 Hz
-          //i2cGPS.sendCommand(setRATE_2Hz); // Set Navigation/Measurement Rate to 2 Hz
-          //i2cGPS.sendCommand(setRATE_1Hz); // Set Navigation/Measurement Rate to 1 Hz
-          
-          delay(1100); // Wait
+          //setRATE_20Hz(); // Set Navigation/Measurement Rate to 20 Hz
+          //setRATE_10Hz(); // Set Navigation/Measurement Rate to 10 Hz
+          //setRATE_8Hz(); // Set Navigation/Measurement Rate to 8 Hz
+          setRATE_8Hz_4c(); // Set Measurement Rate to 8 Hz / Navigation to 4 cycles
+          //setRATE_5Hz(); // Set Navigation/Measurement Rate to 5 Hz
+          //setRATE_4Hz(); // Set Navigation/Measurement Rate to 4 Hz
+          //setRATE_2Hz(); // Set Navigation/Measurement Rate to 2 Hz
+          //setRATE_1Hz(); // Set Navigation/Measurement Rate to 1 Hz
 
+          
           // If we are in BASE mode, check the SURVEY_IN pin
           if (base_mode == true) {
             if (digitalRead(SurveyInPin) == LOW) {
               // We are in BASE mode and the SURVEY_IN pin is low so send the extra UBX messages:
               Serial.println("SURVEY_IN mode selected");
               survey_in_mode = true; // Set the survey_in_mode flag true
-              i2cGPS.sendCommand(setRTCMon); // Enable the RTCM messages on UART2
+              setRTCMon(); // Enable the RTCM messages on UART2
               delay(1100);
-              i2cGPS.sendCommand(setSurveyIn); // Enable SURVEY_IN mode
+              setSurveyIn(); // Enable SURVEY_IN mode
               delay(1100);
             }
           }
@@ -868,13 +868,14 @@ void loop() // run over and over again
           startTimerInterval(0.000217); 
           
           loop_step = start_rawx; // start rawx messages
+
         }
     }
     break;
 
     // (Re)Start RAWX messages
     case start_rawx: {
-      i2cGPS.sendCommand(setRAWXon); // (Re)Start the UBX and NMEA messages
+      setRAWXon(); // (Re)Start the UBX and NMEA messages
 
       bufferPointer = 0; // (Re)initialise bufferPointer
       maxSerialBufferAvailable = 0; // (Re)initialise maxSerialBufferAvailable
@@ -1435,7 +1436,7 @@ void loop() // run over and over again
 
     // Disable RAWX messages, save any residual data and close the file, possibly for the last time
     case close_file: {
-      i2cGPS.sendCommand(setRAWXoff); // Disable RAWX messages
+      setRAWXoff(); // Disable RAWX messages
       int waitcount = 0;
       while (waitcount < dwell) { // Wait for residual data
         while (SerialBuffer.available()) {
@@ -1627,7 +1628,7 @@ void loop() // run over and over again
     // RAWX data lost sync so disable RAWX messages, save any residual data, close the file, open another and restart RAWX messages
     // Don't update the next RTC alarm - leave it as it is
     case restart_file: {
-      i2cGPS.sendCommand(setRAWXoff); // Disable RAWX messages
+      setRAWXoff(); // Disable RAWX messages
       int waitcount = 0;
       while (waitcount < dwell) { // Wait for residual data
         while (SerialBuffer.available()) {

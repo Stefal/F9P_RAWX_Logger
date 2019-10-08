@@ -299,6 +299,14 @@ uint8_t setRATE_4Hz() { return i2cGPS.setVal16(0x30210001, 0x00fa, VAL_LAYER_RAM
 uint8_t setRATE_2Hz() { return i2cGPS.setVal16(0x30210001, 0x01f4, VAL_LAYER_RAM); }
 uint8_t setRATE_1Hz() { return i2cGPS.setVal16(0x30210001, 0x03e8, VAL_LAYER_RAM); }
 
+// Set the nav cycle (5 cycles for 10Hz measurement rate = 2Hz Nav rate)
+// UBX-CFG-VALSET message with a key ID of 0x30210002 (CFG-RATE-NAV)
+uint8_t setNAV_RATE_1c() { return i2cGPS.setVal16(0x30210002, 0x0001, VAL_LAYER_RAM); }
+uint8_t setNAV_RATE_2c() { return i2cGPS.setVal16(0x30210002, 0x0002, VAL_LAYER_RAM); }
+uint8_t setNAV_RATE_3c() { return i2cGPS.setVal16(0x30210002, 0x0003, VAL_LAYER_RAM); }
+uint8_t setNAV_RATE_4c() { return i2cGPS.setVal16(0x30210002, 0x0004, VAL_LAYER_RAM); }
+uint8_t setNAV_RATE_5c() { return i2cGPS.setVal16(0x30210002, 0x0005, VAL_LAYER_RAM); }
+
 // Set the navigation dynamic model
 // UBX-CFG-VALSET message with a key ID of 0x20110021 (CFG-NAVSPG-DYNMODEL)
 uint8_t setNAVportable() { return i2cGPS.setVal8(0x20110021, 0x00, VAL_LAYER_RAM); };
@@ -669,7 +677,7 @@ void setup()
 
   boolean response = true;
   response &= disableI2cNMEA(); //Disable NMEA messages on the I2C port leaving it clear for UBX messages
-  response &= setUART1BAUD(); // Change the UART1 baud rate to 230400
+  response &= setUART1BAUD_460800(); // Change the UART1 baud rate to 230400
   response &= setRAWXoff(); // Disable RAWX messages on UART1. Also disables the NMEA high precision mode
   response &= setNMEAoff(); // Disable NMEA messages on UART1
   response &= setTALKERID(); // Set NMEA TALKERID to GP
@@ -838,14 +846,20 @@ void loop() // run over and over again
           }
 
           // Set the RAWX measurement rate
-          //setRATE_20Hz(); // Set Navigation/Measurement Rate to 20 Hz
-          //setRATE_10Hz(); // Set Navigation/Measurement Rate to 10 Hz
-          //setRATE_8Hz(); // Set Navigation/Measurement Rate to 8 Hz
-          setRATE_8Hz_4c(); // Set Measurement Rate to 8 Hz / Navigation to 4 cycles
-          //setRATE_5Hz(); // Set Navigation/Measurement Rate to 5 Hz
-          //setRATE_4Hz(); // Set Navigation/Measurement Rate to 4 Hz
-          //setRATE_2Hz(); // Set Navigation/Measurement Rate to 2 Hz
-          //setRATE_1Hz(); // Set Navigation/Measurement Rate to 1 Hz
+          //setRATE_20Hz(); // Set Measurement Rate to 20 Hz
+          //setRATE_10Hz(); // Set Measurement Rate to 10 Hz
+          setRATE_8Hz(); // Set Measurement Rate to 8 Hz
+          //setRATE_5Hz(); // Set Measurement Rate to 5 Hz
+          //setRATE_4Hz(); // Set Measurement Rate to 4 Hz
+          //setRATE_2Hz(); // Set Measurement Rate to 2 Hz
+          //setRATE_1Hz(); // Set Measurement Rate to 1 Hz
+
+          // Set the NAV cycles
+          //setNAV_RATE_5c(); // Set Nav cycle to 5 cycles
+          setNAV_RATE_4c(); // Set Nav cycle to 4 cycles
+          //setNAV_RATE_3c(); // Set Nav cycle to 3 cycles
+          //setNAV_RATE_2c(); // Set Nav cycle to 2 cycles
+          //setNAV_RATE_1c(); // Set Nav cycle to 1 cycles
 
           
           // If we are in BASE mode, check the SURVEY_IN pin

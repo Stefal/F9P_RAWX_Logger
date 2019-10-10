@@ -211,7 +211,7 @@ uint8_t setRAWXoff() {
   i2cGPS.addCfgValset8(0x2091002a, 0x00);    // CFG-MSGOUT-UBX_NAV_POSLLH_UART1
   i2cGPS.addCfgValset8(0x20910007, 0x00);    // CFG-MSGOUT-UBX_NAV_PVT_UART1
   i2cGPS.addCfgValset8(0x2091001b, 0x00);    // CFG-MSGOUT-UBX_NAV_STATUS_UART1
-  i2cGPS.addCfgValset8(0x20930031, 0x01);    // CFG-NMEA-MAINTALKERID : This line sets the main talker ID to GP
+  //i2cGPS.addCfgValset8(0x20930031, 0x01);    // CFG-NMEA-MAINTALKERID : This line sets the main talker ID to GP
   i2cGPS.addCfgValset8(0x10930006, 0x00);    // CFG-NMEA-HIGHPREC : This line disables NMEA high precision mode
   return i2cGPS.sendCfgValset8(0x209100bb, 0x00);  // CFG-MSGOUT-NMEA_ID_GGA_UART1 : This line disables the GGA message
 }
@@ -234,10 +234,10 @@ uint8_t setRAWXon() {
   i2cGPS.newCfgValset8(0x209102a5, 0x01, VAL_LAYER_RAM);
   i2cGPS.addCfgValset8(0x20910232, 0x01);
   i2cGPS.addCfgValset8(0x20910179, 0x01);
-  i2cGPS.addCfgValset8(0x2091002a, 0x00);   // Change the last byte from 0x01 to 0x00 to leave NAV_POSLLH disabled
+  i2cGPS.addCfgValset8(0x2091002a, 0x01);   // Change the last byte from 0x01 to 0x00 to leave NAV_POSLLH disabled
   i2cGPS.addCfgValset8(0x20910007, 0x01);   // Change the last byte from 0x01 to 0x00 to leave NAV_PVT disabled
   i2cGPS.addCfgValset8(0x2091001b, 0x01);   // This line enables the NAV_STATUS message
-  i2cGPS.addCfgValset8(0x20930031, 0x03);   // This line sets the main talker ID to GN
+  //i2cGPS.addCfgValset8(0x20930031, 0x03);   // This line sets the main talker ID to GN
   i2cGPS.addCfgValset8(0x10930006, 0x01);   // This sets the NMEA high precision mode
   return i2cGPS.sendCfgValset8(0x209100bb, 0x01); // This (re)enables the GGA mesage
 }
@@ -680,7 +680,7 @@ void setup()
   response &= setUART1BAUD_460800(); // Change the UART1 baud rate to 230400
   response &= setRAWXoff(); // Disable RAWX messages on UART1. Also disables the NMEA high precision mode
   response &= setNMEAoff(); // Disable NMEA messages on UART1
-  response &= setTALKERID(); // Set NMEA TALKERID to GP
+  //response &= setTALKERID(); // Set NMEA TALKERID to GP
   response &= setRATE_1Hz(); // Set Navigation/Measurement Rate to 1Hz
   response &= setUART2BAUD_115200(); // Set UART2 Baud rate
   response &= disableSurveyIn(); // Disable Survey_In mode
@@ -710,11 +710,11 @@ void setup()
     base_mode = false; // Clear base_mode flag
     Serial.println("ROVER mode selected");
     // Select one mode for the mobile Rover Logger
-    //setNAVportable(); // Set Portable Navigation Mode
+    setNAVportable(); // Set Portable Navigation Mode
     //setNAVpedestrian(); // Set Pedestrian Navigation Mode
     //setNAVautomotive(); // Set Automotive Navigation Mode
     //setNAVsea(); // Set Sea Navigation Mode
-    setNAVair1g(); // Set Airborne <1G Navigation Mode
+    //setNAVair1g(); // Set Airborne <1G Navigation Mode
     //setNAVair2g(); // Set Airborne <2G Navigation Mode
     //setNAVair4g(); // Set Airborne <4G Navigation Mode
     //setNAVwrist(); // Set Wrist Navigation Mode

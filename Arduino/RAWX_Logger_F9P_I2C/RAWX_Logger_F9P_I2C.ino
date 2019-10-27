@@ -62,6 +62,20 @@ const int dwell = 300;
 #include "SparkFun_Ublox_Arduino_Library.h" //http://librarymanager/All#SparkFun_Ublox_GPS
 SFE_UBLOX_GPS i2cGPS;
 
+// Oled
+
+#define Oled // Uncomment if you want to use the Qwiic Micro Oled screen 
+#ifdef Oled
+#include <SFE_MicroOLED.h>
+//The library assumes a reset pin is necessary. The Qwiic OLED has RST hard-wired, so pick an arbitrarty IO pin that is not being used
+#define PIN_RESET 9  
+//The DC_JUMPER is the I2C Address Select jumper. Set to 1 if the jumper is open (Default), or set to 0 if it's closed.
+#define DC_JUMPER 1 
+
+MicroOLED oled(PIN_RESET, DC_JUMPER);    // I2C declaration
+
+#endif
+
 // LEDs
 
 //#define NoLED // Uncomment this line to completely disable the LEDs
@@ -652,6 +666,27 @@ void setup()
   Wire.begin();
   Wire.setClock(400000); //Increase I2C clock speed to 400kHz
 
+#ifdef Oled
+  oled.begin();    // Initialize the OLED
+  oled.clear(ALL); // Clear the display's internal memory
+  int middleX = oled.getLCDWidth() / 2;
+  int middleY = oled.getLCDHeight() / 2;
+  oled.clear(PAGE);
+  oled.setFontType(1);
+  String line1="GNSS";
+  String line2="LOGGER";
+  oled.setCursor(middleX - (oled.getFontWidth() * (line1.length()/2)),
+                 middleY - (oled.getFontHeight()));
+  oled.print(line1);
+  oled.setCursor(middleX - (oled.getFontWidth() * (line2.length()/2)),
+                 middleY);
+  oled.print(line2);
+  oled.display();
+  oled.clear(PAGE);
+  delay(1000);
+  oled_step("Connecting to F9P...");
+#endif
+
   if (i2cGPS.begin(Wire,0x42) == false) //Connect to the Ublox module using Wire port
   {
     Serial.println(F("Panic!! Ublox GNSS not detected at default I2C address. Please check wiring. Freezing!"));
@@ -665,6 +700,9 @@ void setup()
     while (1);
   }
   Serial.println(F("Ublox GNSS found!"));
+#ifdef Oled
+  oled_step_answer("OK");
+#endif
 
 #ifdef DEBUG
 #ifdef DEBUGi2c
@@ -674,7 +712,9 @@ void setup()
 
   // These sendCommands will timeout as the commandAck checking in processUBXpacket expects the packet to be in packetCfg, not our custom packet!
   // Turn on DEBUG to see if the commands are acknowledged (Received: CLS:5 ID:1 Payload: 6 8A) or not acknowledged (CLS:5 ID:0)
-
+#ifdef Oled
+  oled_step("Initializing GNSS...");
+#endif
   boolean response = true;
   response &= disableI2cNMEA(); //Disable NMEA messages on the I2C port leaving it clear for UBX messages
   response &= setUART1BAUD_460800(); // Change the UART1 baud rate to 230400
@@ -690,11 +730,14 @@ void setup()
   if (response == false) {
     Serial.println("Panic!! Unable to initialize GNSS!");
     Serial.println("Waiting for reset...");
+#ifdef Oled
+    oled_step_answer("Fail");
 #ifndef NoLED
 #ifdef NeoPixel
     setLED(red); // Set NeoPixel to red
 #else
     digitalWrite(RedLED, HIGH); // Turn red LED on
+#endif
 #endif
 #endif
     // don't do anything more:
@@ -724,7 +767,9 @@ void setup()
   while(Serial1.available()){Serial1.read();} // Flush RX buffer so we don't confuse Adafruit_GPS with UBX acknowledgements
 
   Serial.println("GNSS initialized!");
-
+#ifdef Oled
+  oled_step_answer("OK");
+#endif
 #ifndef NoLED
 #ifndef NeoPixel
   // flash the red LED during SD initialisation
@@ -734,10 +779,16 @@ void setup()
 
   // Initialise SD card
   Serial.println("Initializing SD card...");
+#ifdef Oled
+  oled_step("Initializing SD Card");
+#endif
   // See if the SD card is present and can be initialized
   if (!sd.begin(cardSelect, SD_SCK_MHZ(50))) {
     Serial.println("Panic!! SD Card Init failed, or not present!");
     Serial.println("Waiting for reset...");
+#ifdef Oled
+  oled_step_answer("Fail");
+#endif
 #ifndef NoLED
 #ifdef NeoPixel
     setLED(red); // Set NeoPixel to red
@@ -747,7 +798,9 @@ void setup()
     while(1);
   }
   Serial.println("SD Card initialized!");
-
+#ifdef Oled
+  oled_step_answer("Ok");
+#endif
 #ifndef NoLED
 #ifdef NeoPixel
   setLED(dim_cyan); // Set NeoPixel to dim cyan now that the SD card is initialised
@@ -762,6 +815,9 @@ void setup()
 #endif
           
   Serial.println("Waiting for GNSS fix...");
+#ifdef Oled
+  oled_step("Waiting for GNSS fix...");
+#endif
 }
 
 void loop() // run over and over again
@@ -831,6 +887,9 @@ void loop() // run over and over again
         }
   
         if (valfix == maxvalfix) { // wait until we have enough valid fixes
+#ifdef Oled
+          oled_step_answer("Ok");
+#endif
           
           // Set and start the RTC
           alarmFlag = false; // Make sure alarm flag is clear
@@ -841,6 +900,9 @@ void loop() // run over and over again
 
           // check if voltage is > LOWBAT(V), if not then don't try to log any data
           if (vbat < LOWBAT) {
+#ifdef Oled
+            oled_step("Low Battery!");
+#endif
             Serial.println("Low Battery!");
             break;
           }
@@ -971,11 +1033,17 @@ void loop() // run over and over again
       if (rawx_dataFile.open(rawx_filename, O_CREAT | O_WRITE | O_EXCL)) {
         Serial.print("Logging to ");
         Serial.println(rawx_filename);
+#ifdef Oled
+        oled_step("Logging...");
+#endif
       }
       // if the file isn't open, pop up an error:
       else {
         Serial.println("Panic!! Error opening RAWX file!");
         Serial.println("Waiting for reset...");
+#ifdef Oled
+        oled_step("Panic!! Error opening RAWX file!");
+#endif
 #ifndef NoLED
 #ifdef NeoPixel
       setLED(red); // Set the NeoPixel to red to indicate a problem
@@ -1588,6 +1656,9 @@ void loop() // run over and over again
       Serial.println(bytes_written);
 #endif
       Serial.println("File closed!");
+#ifdef Oled
+      oled_step("Logging stopped");
+#endif
       // Either the battery is low or the user pressed the stop button:
       if (stop_pressed == true) {
         // Stop switch was pressed so just wait for a reset
@@ -1810,3 +1881,23 @@ void set_Alarm (int alarm_delay) {
             rtc.attachInterrupt(alarmMatch); // Attach alarm interrupt
             }
   }
+
+void oled_step(String step)
+{
+  oled.clear(PAGE);     // Clear the screen
+  oled.setFontType(0);  // Set font to type 0
+  oled.setCursor(0, 0); // Set cursor to top-left
+  oled.println(step);
+  oled.display();
+  delay(1000);
+}
+
+void oled_step_answer(String answer)
+{
+  oled.setFontType(1);
+  oled.setCursor(25,30);
+  oled.println(answer);
+  oled.display();
+  delay(1000);
+}
+

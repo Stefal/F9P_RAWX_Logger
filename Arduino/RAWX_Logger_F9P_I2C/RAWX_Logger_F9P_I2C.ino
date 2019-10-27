@@ -29,6 +29,8 @@ const int DELAYED_STOP = 10;
 // For a measurement rate of 4Hz (250msec), 300msec is a sensible value. i.e. slightly more than one measurement interval
 const int dwell = 300;
 
+void oled_step_answer(String answer, int fonttype = 1);
+
 // Send serial debug messages
 //#define DEBUG // Comment this line out to disable debug messages
 
@@ -1857,6 +1859,27 @@ void loop() // run over and over again
   }
 }
 
+void oled_step(String step)
+{
+  oled.clear(PAGE);     // Clear the screen
+  oled.setFontType(0);  // Set font to type 0
+  oled.setCursor(0, 0); // Set cursor to top-left
+  oled.println(step);
+  oled.display();
+  delay(1000);
+}
+
+void oled_step_answer(String answer, int fonttype)
+{
+  int middleX = oled.getLCDWidth() / 2;
+  int middleY = oled.getLCDHeight() / 2;
+  oled.setFontType(fonttype);
+  oled.setCursor(middleX - ((oled.getFontWidth() + 1) * answer.length() / 2),30);
+  oled.println(answer);
+  oled.display();
+  delay(1000);
+}
+
 void set_Alarm (int alarm_delay) {
           uint8_t nextAlarmSecond = i2cGPS.getSecond(); // Next alarm second
           uint8_t nextAlarmMin = (i2cGPS.getMinute()+alarm_delay); // Calculate next alarm minutes
@@ -1871,33 +1894,27 @@ void set_Alarm (int alarm_delay) {
           rtc.setAlarmHours(nextAlarmHour); // Set RTC Alarm Hours
           rtc.setAlarmMinutes(nextAlarmMin); // Set RTC Alarm Minutes
           rtc.setAlarmSeconds(nextAlarmSecond); // Set RTC Alarm Seconds
-          if (splitLog and !(stop_delayed_active)) Serial.print("Next new file set to: ");
-          if (stop_delayed_active) Serial.print("Logging will stop at: ");
-
+          if (splitLog and !(stop_delayed_active)) {
+            Serial.print("Next new file set to: ");
+#ifdef Oled
+            oled_step("Next new file set to: ");
+#endif
+          }
+          if (stop_delayed_active) {
+            Serial.print("Logging will stop at: ");
+#ifdef Oled
+            oled_step("Logging will stop at: ");
+#endif            
+          }
           if (splitLog or stop_delayed_active) { // One condition is active to set alarm
-            Serial.print(nextAlarmHour); Serial.print("H"); Serial.print(nextAlarmMin);
-            Serial.print("mn"); Serial.print(nextAlarmSecond); Serial.println("s");
+            String stop_time = String(nextAlarmHour); stop_time += "H";
+            stop_time += String(nextAlarmMin); stop_time += "mn";
+            stop_time += String(nextAlarmSecond); stop_time += "s";
+            Serial.println(stop_time);
+#ifdef Oled
+            oled_step_answer(stop_time, 0);
+#endif
             rtc.enableAlarm(rtc.MATCH_HHMMSS); // Alarm Match on hours, minutes and seconds
             rtc.attachInterrupt(alarmMatch); // Attach alarm interrupt
             }
   }
-
-void oled_step(String step)
-{
-  oled.clear(PAGE);     // Clear the screen
-  oled.setFontType(0);  // Set font to type 0
-  oled.setCursor(0, 0); // Set cursor to top-left
-  oled.println(step);
-  oled.display();
-  delay(1000);
-}
-
-void oled_step_answer(String answer)
-{
-  oled.setFontType(1);
-  oled.setCursor(25,30);
-  oled.println(answer);
-  oled.display();
-  delay(1000);
-}
-

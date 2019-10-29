@@ -30,6 +30,7 @@ const int DELAYED_STOP = 10;
 const int dwell = 300;
 
 void oled_step_answer(String answer, int fonttype = 1);
+void oled_step(String step, int pause = 1000 );
 
 // Send serial debug messages
 //#define DEBUG // Comment this line out to disable debug messages
@@ -1036,7 +1037,7 @@ void loop() // run over and over again
         Serial.print("Logging to ");
         Serial.println(rawx_filename);
 #ifdef Oled
-        oled_step("Logging...");
+        oled_step("Logging...", 0);
 #endif
       }
       // if the file isn't open, pop up an error:
@@ -1406,7 +1407,7 @@ void loop() // run over and over again
         loop_step = close_file; // now close the file
         break;
         }
-      // Check if stop_ delay button has been pressed and stop_delayed is not already active
+      // Check if stop_delay button has been pressed and stop_delayed is not already active
       if ((digitalRead(DelayedPin) == LOW) and (stop_delayed_active != true)) {
         stop_delayed_pressed = true;
         stop_delayed_active = true;
@@ -1859,14 +1860,14 @@ void loop() // run over and over again
   }
 }
 
-void oled_step(String step)
+void oled_step(String step, int pause)
 {
   oled.clear(PAGE);     // Clear the screen
   oled.setFontType(0);  // Set font to type 0
   oled.setCursor(0, 0); // Set cursor to top-left
   oled.println(step);
   oled.display();
-  delay(1000);
+  delay(pause);
 }
 
 void oled_step_answer(String answer, int fonttype)
@@ -1897,13 +1898,13 @@ void set_Alarm (int alarm_delay) {
           if (splitLog and !(stop_delayed_active)) {
             Serial.print("Next new file set to: ");
 #ifdef Oled
-            oled_step("Next new file set to: ");
+            oled_step("Next new file set to:\n");
 #endif
           }
           if (stop_delayed_active) {
             Serial.print("Logging will stop at: ");
 #ifdef Oled
-            oled_step("Logging will stop at: ");
+            oled_step("Logging will stop at:\n");
 #endif            
           }
           if (splitLog or stop_delayed_active) { // One condition is active to set alarm

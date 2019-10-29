@@ -1898,13 +1898,13 @@ void set_Alarm (int alarm_delay) {
           if (splitLog and !(stop_delayed_active)) {
             Serial.print("Next new file set to: ");
 #ifdef Oled
-            oled_step("Next new file set to:\n");
+            oled_step("Next new file set to:\n", 0);
 #endif
           }
           if (stop_delayed_active) {
             Serial.print("Logging will stop at: ");
 #ifdef Oled
-            oled_step("Logging will stop at:\n");
+            oled_step("Logging\nwill stop\nat:\n", 0);
 #endif            
           }
           if (splitLog or stop_delayed_active) { // One condition is active to set alarm

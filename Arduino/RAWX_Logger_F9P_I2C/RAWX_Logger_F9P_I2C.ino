@@ -255,7 +255,7 @@ uint8_t setRAWXon() {
   i2cGPS.addCfgValset8(0x20910007, 0x01);   // Change the last byte from 0x01 to 0x00 to leave NAV_PVT disabled
   i2cGPS.addCfgValset8(0x2091001b, 0x01);   // This line enables the NAV_STATUS message
   //i2cGPS.addCfgValset8(0x20930031, 0x03);   // This line sets the main talker ID to GN
-  i2cGPS.addCfgValset8(0x10930006, 0x01);   // This sets the NMEA high precision mode
+  //i2cGPS.addCfgValset8(0x10930006, 0x01);   // This sets the NMEA high precision mode
   return i2cGPS.sendCfgValset8(0x209100bb, 0x01); // This (re)enables the GGA mesage
 }
 
@@ -323,6 +323,7 @@ uint8_t setNAV_RATE_2c() { return i2cGPS.setVal16(0x30210002, 0x0002, VAL_LAYER_
 uint8_t setNAV_RATE_3c() { return i2cGPS.setVal16(0x30210002, 0x0003, VAL_LAYER_RAM); }
 uint8_t setNAV_RATE_4c() { return i2cGPS.setVal16(0x30210002, 0x0004, VAL_LAYER_RAM); }
 uint8_t setNAV_RATE_5c() { return i2cGPS.setVal16(0x30210002, 0x0005, VAL_LAYER_RAM); }
+uint8_t setNAV_RATE_8c() { return i2cGPS.setVal16(0x30210002, 0x0008, VAL_LAYER_RAM); }
 
 // Set the navigation dynamic model
 // UBX-CFG-VALSET message with a key ID of 0x20110021 (CFG-NAVSPG-DYNMODEL)
@@ -637,7 +638,7 @@ void setup()
   // initialise DelayedPin (A4) as an input for the delayed_stop switch
   pinMode(DelayedPin, INPUT_PULLUP);
 
-  delay(10000); // Allow 10 sec for user to open serial monitor (Comment this line if required)
+  delay(3000); // Allow 10 sec for user to open serial monitor (Comment this line if required)
   //while (!Serial); // OR Wait for user to run python script or open serial monitor (Comment this line as required)
 
   Serial.begin(115200);
@@ -786,7 +787,7 @@ void setup()
   oled_step("Initializing SD Card");
 #endif
   // See if the SD card is present and can be initialized
-  if (!sd.begin(cardSelect, SD_SCK_MHZ(50))) {
+  if (!sd.begin(cardSelect, SD_SCK_MHZ(12))) {
     Serial.println("Panic!! SD Card Init failed, or not present!");
     Serial.println("Waiting for reset...");
 #ifdef Oled
@@ -920,8 +921,9 @@ void loop() // run over and over again
           //setRATE_1Hz(); // Set Measurement Rate to 1 Hz
 
           // Set the NAV cycles
+          setNAV_RATE_8c();
           //setNAV_RATE_5c(); // Set Nav cycle to 5 cycles
-          setNAV_RATE_4c(); // Set Nav cycle to 4 cycles
+          //setNAV_RATE_4c(); // Set Nav cycle to 4 cycles
           //setNAV_RATE_3c(); // Set Nav cycle to 3 cycles
           //setNAV_RATE_2c(); // Set Nav cycle to 2 cycles
           //setNAV_RATE_1c(); // Set Nav cycle to 1 cycles
@@ -1411,7 +1413,10 @@ void loop() // run over and over again
       if ((digitalRead(DelayedPin) == LOW) and (stop_delayed_active != true)) {
         stop_delayed_pressed = true;
         stop_delayed_active = true;
+        uint32_t before_alarm = millis();
         set_Alarm(DELAYED_STOP);
+        uint32_t time_to_set = millis() - before_alarm;
+        Serial.print("Time to set alarm: "); Serial.println(time_to_set);
         }
       // Check if stop_delayed ended
       else if ((alarmFlag == true) and (stop_delayed_active == true)) {
